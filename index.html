@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroTrading — Ad Performance Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:         #f5f5f5;
+  --surface:    #ffffff;
+  --border:     #e8e8e8;
+  --text-1:     #111111;
+  --text-2:     #555555;
+  --text-3:     #999999;
+  --card-bg:    #fafafa;
+  --hover-bg:   #f9f9f9;
+
+  --blue:       #2563eb;
+  --blue-bg:    #eff6ff;
+  --purple:     #7c3aed;
+  --purple-bg:  #f5f3ff;
+  --amber:      #d97706;
+  --amber-bg:   #fffbeb;
+  --green:      #059669;
+  --green-bg:   #ecfdf5;
+  --red:        #dc2626;
+
+  --chg-pos-bg: #dcfce7; --chg-pos-fg: #15803d;
+  --chg-neg-bg: #fee2e2; --chg-neg-fg: #b91c1c;
+
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+html.dark {
+  --bg:         #0d0d0d;
+  --surface:    #161616;
+  --border:     #272727;
+  --text-1:     #efefef;
+  --text-2:     #999999;
+  --text-3:     #555555;
+  --card-bg:    #1c1c1c;
+  --hover-bg:   #1f1f1f;
+
+  --blue-bg:    #172040;
+  --purple-bg:  #1e1535;
+  --amber-bg:   #1f1700;
+  --green-bg:   #0b2217;
+
+  --chg-pos-bg: #0e2e1a; --chg-pos-fg: #4ade80;
+  --chg-neg-bg: #2e0e0e; --chg-neg-fg: #f87171;
+
+  --shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+/* ── LOADING ── */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: rgba(255,255,255,0.88);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999;
+  gap: 14px;
+  transition: opacity .3s;
+}
+
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.spinner {
+  width: 36px; height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--text-1);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { font-size: 13px; color: var(--text-2); }
+
+/* ── ERROR BANNER ── */
+.error-banner {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: var(--red);
+  font-size: 13px;
+  display: none;
+}
+
+.error-banner.visible { display: block; }
+
+/* ── HEADER ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: var(--shadow);
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.brand-icon {
+  width: 34px; height: 34px;
+  background: var(--text-1);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  font-weight: 800; font-size: 13px; letter-spacing: -0.5px;
+}
+
+.brand-name { font-size: 15px; font-weight: 700; }
+.brand-sub  { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+
+.header-right {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+
+/* ── PILL GROUP ── */
+.pill-group {
+  display: flex; gap: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.pill {
+  padding: 5px 14px;
+  border-radius: 6px; border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  transition: all .15s;
+}
+
+.pill.active {
+  background: var(--surface);
+  color: var(--text-1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ── MONTH NAV ── */
+.month-nav { display: flex; align-items: center; gap: 6px; }
+
+.nav-btn {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); cursor: pointer;
+  color: var(--text-2); font-size: 16px; line-height: 1;
+  transition: all .15s;
+}
+.nav-btn:hover { background: var(--bg); color: var(--text-1); }
+
+.month-display {
+  min-width: 150px; text-align: center;
+  font-size: 14px; font-weight: 600;
+}
+
+/* ── REFRESH BTN ── */
+.refresh-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px; font-weight: 500; color: var(--text-2);
+  cursor: pointer; font-family: inherit;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.refresh-btn:hover { background: var(--bg); color: var(--text-1); }
+.refresh-btn.spinning svg { animation: spin .7s linear infinite; }
+
+.last-updated {
+  font-size: 11px; color: var(--text-3); white-space: nowrap;
+}
+
+.icon-btn {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  cursor: pointer; color: var(--text-2); transition: all .15s; flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--bg); color: var(--text-1); }
+
+/* ── DATE PICKER ── */
+.date-picker { position: relative; }
+
+.dp-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px; font-weight: 500; color: var(--text-2);
+  cursor: pointer; font-family: inherit;
+  transition: all .15s; white-space: nowrap;
+}
+.dp-btn:hover          { background: var(--bg); color: var(--text-1); }
+.dp-btn.open           { border-color: var(--blue); color: var(--blue); }
+
+.dp-panel {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+  min-width: 200px; z-index: 200; overflow: hidden;
+  display: none;
+}
+.dp-panel.open         { display: block; }
+
+.dp-option {
+  padding: 9px 16px; cursor: pointer; font-size: 13px;
+  color: var(--text-1); display: flex; align-items: center; gap: 8px;
+  transition: background .1s;
+}
+.dp-option:hover       { background: var(--bg); }
+.dp-option.active      { color: var(--blue); font-weight: 600; }
+.dp-option.active::before { content: '✓'; font-size: 11px; }
+
+.dp-divider            { height: 1px; background: var(--border); margin: 4px 0; }
+
+.dp-custom {
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+  border-top: 1px solid var(--border);
+}
+.dp-custom-label {
+  font-size: 10px; color: var(--text-3); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.dp-custom input[type=date] {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 6px; font-size: 12px; font-family: inherit;
+  color: var(--text-1); background: var(--bg); outline: none;
+}
+.dp-custom input[type=date]:focus { border-color: var(--blue); }
+.dp-apply {
+  width: 100%; padding: 7px; background: var(--blue); color: #fff;
+  border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; margin-top: 2px;
+  transition: opacity .15s;
+}
+.dp-apply:hover { opacity: .8; }
+
+/* ── LAYOUT ── */
+.layout {
+  display: flex;
+  min-height: calc(100vh - 60px);
+}
+
+.sidebar {
+  width: 210px; flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 10px 0 24px;
+  position: sticky; top: 60px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+}
+
+.nav-group-label {
+  padding: 14px 18px 4px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-3);
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  color: var(--text-2); background: none; border: none;
+  width: 100%; text-align: left; font-family: inherit;
+  transition: all .15s; border-radius: 0;
+}
+.nav-item:hover  { background: var(--bg); color: var(--text-1); }
+.nav-item.active {
+  color: var(--blue); background: var(--blue-bg); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+.nav-item svg    { flex-shrink: 0; opacity: .7; }
+.nav-item.active svg { opacity: 1; }
+
+.nav-divider { height: 1px; background: var(--border); margin: 8px 0; }
+
+.content-area { flex: 1; min-width: 0; }
+
+.tab-panel { display: none; padding: 24px 28px; }
+.tab-panel.active { display: block; }
+
+/* ── MAIN (legacy, now tab-panel padding) ── */
+
+/* ── FUNNEL OVERVIEW ── */
+.funnel-overview {
+  background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 20px; overflow: hidden; box-shadow: var(--shadow);
+}
+
+.fo-stage {
+  padding: 20px 24px; position: relative;
+}
+
+.fo-stage + .fo-stage { border-left: 1px solid var(--border); }
+
+.fo-stage::after {
+  content: '→'; position: absolute; right: -9px; top: 50%;
+  transform: translateY(-50%); color: var(--text-3); font-size: 16px;
+  z-index: 1; background: var(--surface); padding: 2px 0;
+}
+.fo-stage:last-child::after { display: none; }
+
+.fo-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; margin-bottom: 8px;
+}
+.fo-tag .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.fo-val    { font-size: 28px; font-weight: 800; line-height: 1.1; margin-bottom: 3px; }
+.fo-sub    { font-size: 12px; color: var(--text-2); }
+.fo-change { margin-top: 6px; min-height: 18px; }
+
+.chg {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 700; padding: 2px 7px;
+  border-radius: 20px; letter-spacing: .02em;
+}
+.chg-pos { background: var(--chg-pos-bg); color: var(--chg-pos-fg); }
+.chg-neg { background: var(--chg-neg-bg); color: var(--chg-neg-fg); }
+.chg-neu { background: var(--bg); color: var(--text-3); }
+
+.kpi-change { margin-top: 4px; min-height: 16px; }
+
+.s-awareness .fo-tag, .s-awareness .fo-val { color: var(--blue);   }
+.s-awareness .dot   { background: var(--blue);   }
+.s-capture .fo-tag,  .s-capture .fo-val   { color: var(--purple); }
+.s-capture .dot     { background: var(--purple); }
+.s-engagement .fo-tag, .s-engagement .fo-val { color: var(--amber); }
+.s-engagement .dot  { background: var(--amber);  }
+.s-sales .fo-tag,   .s-sales .fo-val      { color: var(--green);  }
+.s-sales .dot       { background: var(--green);  }
+
+/* ── CHARTS ── */
+.chart-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-bottom: 20px; }
+.overview-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+.chart-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+}
+
+.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-title  { font-size: 13px; font-weight: 600; }
+
+.chart-legend { display: flex; gap: 14px; }
+.legend-item  { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); }
+.legend-dot   { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ── SECTIONS ── */
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 16px;
+  overflow: hidden; box-shadow: var(--shadow);
+}
+
+.section-head {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.stage-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 9px; border-radius: 100px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.badge-awareness  { background: var(--blue-bg);   color: var(--blue);   }
+.badge-capture    { background: var(--purple-bg);  color: var(--purple); }
+.badge-engagement { background: var(--amber-bg);   color: var(--amber);  }
+.badge-sales      { background: var(--green-bg);   color: var(--green);  }
+
+.section-name { font-size: 14px; font-weight: 600; }
+.section-desc { font-size: 12px; color: var(--text-3); margin-left: auto; }
+
+/* ── KPI GRID ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 10px; padding: 16px 20px;
+}
+
+.kpi-card {
+  padding: 13px 15px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--card-bg);
+}
+
+.kpi-label {
+  font-size: 10px; font-weight: 600; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.kpi-value { font-size: 21px; font-weight: 700; line-height: 1.2; color: var(--text-1); }
+.kpi-value.hl-blue   { color: var(--blue);   }
+.kpi-value.hl-green  { color: var(--green);  }
+.kpi-value.hl-amber  { color: var(--amber);  }
+.kpi-value.hl-purple { color: var(--purple); }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+th {
+  padding: 7px 12px; text-align: right;
+  font-weight: 600; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-3); border-bottom: 1px solid var(--border);
+  background: var(--card-bg); white-space: nowrap;
+}
+th:first-child { text-align: left; }
+
+td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  text-align: right; color: var(--text-2); white-space: nowrap;
+}
+td:first-child { text-align: left; color: var(--text-1); font-weight: 600; }
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--hover-bg); }
+
+.th-group {
+  text-align: center; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 6px 0 2px; border-bottom: none;
+}
+.th-awareness  { color: var(--blue);   background: var(--blue-bg); }
+.th-capture    { color: var(--purple); background: var(--purple-bg); }
+.th-engagement { color: var(--amber);  background: var(--amber-bg); }
+.th-sales      { color: var(--green);  background: var(--green-bg); }
+
+/* ── NO DATA ── */
+.no-data {
+  padding: 48px 24px; text-align: center;
+  color: var(--text-3); font-size: 13px;
+}
+
+/* ── INSIGHTS ── */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.insight-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow);
+}
+.insight-label {
+  font-size: 10px; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px;
+}
+.insight-val { font-size: 26px; font-weight: 800; line-height: 1.1; margin-bottom: 6px; }
+
+.highlight-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
+.highlight-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
+}
+.hc-tag  { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 10px; }
+.hc-date { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.hc-val  { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.hc-sub  { font-size: 11px; color: var(--text-3); }
+
+.funnel-eff { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.fe-row     { display: grid; grid-template-columns: 180px 1fr 56px; align-items: center; gap: 12px; }
+.fe-label   { font-size: 12px; color: var(--text-2); font-weight: 500; }
+.fe-bar-wrap{ height: 8px; background: var(--bg); border-radius: 100px; overflow: hidden; }
+.fe-bar     { height: 100%; border-radius: 100px; transition: width .6s ease; }
+.fe-val     { font-size: 13px; font-weight: 700; text-align: right; }
+
+/* ── TRENDS ── */
+.trends-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1024px) {
+  .sidebar { width: 56px; }
+  .nav-item span { display: none; }
+  .nav-group-label { display: none; }
+  .nav-item { justify-content: center; padding: 10px; }
+  .nav-item.active { box-shadow: inset 0 -3px 0 var(--blue); }
+  .trends-grid { grid-template-columns: 1fr; }
+  .highlight-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .funnel-overview { grid-template-columns: repeat(2, 1fr); }
+  .fo-stage + .fo-stage { border-left: none; border-top: 1px solid var(--border); }
+  .fo-stage::after { display: none; }
+  .chart-row { grid-template-columns: 1fr; }
+  .overview-charts { grid-template-columns: 1fr; }
+  .tab-panel { padding: 16px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .brand-sub, .section-desc, .last-updated { display: none; }
+  .funnel-overview { grid-template-columns: 1fr; }
+  .insights-grid { grid-template-columns: repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Loading from Google Sheets…</div>
+</div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="brand">
+    <div class="brand-icon">ZT</div>
+    <div>
+      <div class="brand-name">ZeroTrading</div>
+      <div class="brand-sub">Ad Performance Dashboard</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <!-- Campaign toggle -->
+    <div class="pill-group" id="campaignToggle">
+      <button class="pill active" onclick="setCampaign('HT', this)">High Ticket</button>
+      <button class="pill"        onclick="setCampaign('LT', this)">Low Ticket</button>
+    </div>
+
+    <!-- Date range picker -->
+    <div class="date-picker" id="datePicker">
+      <button class="dp-btn" id="dpBtn" onclick="toggleDatePicker()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span id="dpLabel">This Month</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dp-panel" id="dpPanel">
+        <div class="dp-option" data-range="last7"     onclick="setDateRange('last7')">Last 7 Days</div>
+        <div class="dp-option" data-range="last14"    onclick="setDateRange('last14')">Last 14 Days</div>
+        <div class="dp-option" data-range="last30"    onclick="setDateRange('last30')">Last 30 Days</div>
+        <div class="dp-divider"></div>
+        <div class="dp-option active" data-range="month" onclick="setDateRange('month')">This Month</div>
+        <div class="dp-option" data-range="lastMonth" onclick="setDateRange('lastMonth')">Last Month</div>
+        <div class="dp-divider"></div>
+        <div class="dp-option" data-range="custom"    onclick="setDateRange('custom')">Custom Range</div>
+        <div class="dp-custom" id="dpCustom" style="display:none">
+          <span class="dp-custom-label">From</span>
+          <input type="date" id="dpStart">
+          <span class="dp-custom-label">To</span>
+          <input type="date" id="dpEnd">
+          <button class="dp-apply" onclick="applyCustomRange()">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dark mode toggle -->
+    <button class="icon-btn" id="darkBtn" onclick="toggleDark()" title="Toggle dark mode">
+      <svg id="darkIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+
+    <!-- Refresh -->
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData(true)">
+      <svg id="refreshIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh
+    </button>
+
+    <span class="last-updated" id="lastUpdated"></span>
+  </div>
+</header>
+
+<!-- APP LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-group-label">Analytics</div>
+
+    <button class="nav-item active" data-tab="overview" onclick="setTab('overview')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>Overview</span>
+    </button>
+
+    <button class="nav-item" data-tab="funnel" onclick="setTab('funnel')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Funnel</span>
+    </button>
+
+    <button class="nav-item" data-tab="trends" onclick="setTab('trends')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <span>Trends</span>
+    </button>
+
+    <div class="nav-divider"></div>
+    <div class="nav-group-label">Data</div>
+
+    <button class="nav-item" data-tab="reports" onclick="setTab('reports')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Daily Report</span>
+    </button>
+
+    <button class="nav-item" data-tab="insights" onclick="setTab('insights')">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Insights</span>
+    </button>
+  </nav>
+
+  <!-- CONTENT AREA -->
+  <div class="content-area">
+    <div class="error-banner" id="errorBanner"></div>
+
+    <!-- ── OVERVIEW ── -->
+    <div class="tab-panel active" id="tab-overview">
+      <div class="insights-grid" id="overview-summary"></div>
+      <div id="overview-highlights"></div>
+      <div class="funnel-overview">
+        <div class="fo-stage s-awareness">
+          <div class="fo-tag"><span class="dot"></span>TOFU Awareness</div>
+          <div class="fo-val" id="fo-spend">—</div>
+          <div class="fo-sub" id="fo-impressions">—</div>
+          <div class="fo-change" id="fo-spend-change"></div>
+        </div>
+        <div class="fo-stage s-capture">
+          <div class="fo-tag"><span class="dot"></span>TOFU Capture</div>
+          <div class="fo-val" id="fo-lpv">—</div>
+          <div class="fo-sub" id="fo-lpvrate">—</div>
+          <div class="fo-change" id="fo-lpv-change"></div>
+        </div>
+        <div class="fo-stage s-engagement">
+          <div class="fo-tag"><span class="dot"></span>MOFU Engagement</div>
+          <div class="fo-val" id="fo-subs">—</div>
+          <div class="fo-sub" id="fo-convrate">—</div>
+          <div class="fo-change" id="fo-subs-change"></div>
+        </div>
+        <div class="fo-stage s-sales">
+          <div class="fo-tag"><span class="dot"></span>BOFU Sales</div>
+          <div class="fo-val" id="fo-revenue">—</div>
+          <div class="fo-sub" id="fo-roas">—</div>
+          <div class="fo-change" id="fo-revenue-change"></div>
+        </div>
+      </div>
+      <div class="overview-charts">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Daily Spend vs Revenue</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Spend</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Revenue</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Cash Collected</div>
+            </div>
+          </div>
+          <canvas id="lineChart" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Daily ROAS</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:#059669"></div>Positive</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div>Negative</div>
+            </div>
+          </div>
+          <canvas id="roasTrendChart" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div class="chart-title">Conversion Funnel</div></div>
+          <canvas id="funnelChart" height="160"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Pipeline Quality</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>LPV→Sub %</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Sub→Call %</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Call→Sale %</div>
+            </div>
+          </div>
+          <canvas id="pipelineChart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FUNNEL ── -->
+    <div class="tab-panel" id="tab-funnel">
+      <div class="section">
+        <div class="section-head">
+          <span class="stage-badge badge-awareness">TOFU</span>
+          <span class="section-name">Awareness</span>
+          <span class="section-desc">Reach &amp; attention metrics</span>
+        </div>
+        <div class="kpi-grid" id="grid-awareness"></div>
+      </div>
+      <div class="section">
+        <div class="section-head">
+          <span class="stage-badge badge-capture">TOFU</span>
+          <span class="section-name">Capture</span>
+          <span class="section-desc">Landing page performance</span>
+        </div>
+        <div class="kpi-grid" id="grid-capture"></div>
+      </div>
+      <div class="section">
+        <div class="section-head">
+          <span class="stage-badge badge-engagement">MOFU</span>
+          <span class="section-name">Engagement</span>
+          <span class="section-desc">Form interactions &amp; lead capture</span>
+        </div>
+        <div class="kpi-grid" id="grid-engagement"></div>
+      </div>
+      <div class="section">
+        <div class="section-head">
+          <span class="stage-badge badge-sales">BOFU</span>
+          <span class="section-name">Sales</span>
+          <span class="section-desc">Revenue &amp; deal performance</span>
+        </div>
+        <div class="kpi-grid" id="grid-sales"></div>
+      </div>
+    </div>
+
+    <!-- ── TRENDS ── -->
+    <div class="tab-panel" id="tab-trends">
+      <div class="trends-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">ROAS Over Time</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Revenue ROAS</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>CC ROAS</div>
+            </div>
+          </div>
+          <canvas id="roasChart" height="180"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Cost per Conversion</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Cost/Sub</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Cost/Call</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Cost/Deal</div>
+            </div>
+          </div>
+          <canvas id="costChart" height="180"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Daily Volume</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Subs</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Calls</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Sales</div>
+            </div>
+          </div>
+          <canvas id="volumeChart" height="180"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">CTR &amp; Booking Rate</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>CTR</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Booking Rate</div>
+            </div>
+          </div>
+          <canvas id="rateChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DAILY REPORT ── -->
+    <div class="tab-panel" id="tab-reports">
+      <div class="section">
+        <div class="section-head">
+          <span class="section-name">Daily Breakdown</span>
+          <span class="section-desc" id="tableSubtitle"></span>
+        </div>
+        <div class="table-wrap">
+          <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── INSIGHTS ── -->
+    <div class="tab-panel" id="tab-insights">
+      <div id="insightsContent"><div class="no-data">Loading…</div></div>
+    </div>
+
+  </div><!-- /content-area -->
+</div><!-- /layout -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIGURATION
+//  1. Deploy Code.gs as an Apps Script Web App (see README instructions).
+//  2. Paste the Web App URL below.
+//  3. Add new sheet names here as you create new monthly tabs.
+// ═══════════════════════════════════════════════════════════════════
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwNKmpWauzeb_912NHcT3WESrqzjIXj2B2V-__F2u9xU1fDRKSLzDoJoDdu3sz63srO/exec';
+
+// Cache: how long before a background re-fetch is triggered (ms)
+const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes
+const CACHE_KEY  = 'zeroDash_v2';
+
+const SHEETS = [
+  { name: 'HT-March', campaign: 'HT' },
+  { name: 'HT-April', campaign: 'HT' },
+  // { name: 'LT-March', campaign: 'LT' },
+  // { name: 'LT-April', campaign: 'LT' },
+  // { name: 'HT-May',   campaign: 'HT' },
+];
+
+const MONTH_MAP = {
+  january:1, february:2, march:3, april:4, may:5, june:6,
+  july:7, august:8, september:9, october:10, november:11, december:12,
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+// DATA is keyed as "campaign/YYYY-MM" → { days: { "DD": { ...metrics } } }
+let DATA = {};
+let state = {
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1,
+  campaign: 'HT',
+  dateRange:   'month', // 'last7'|'last14'|'last30'|'month'|'lastMonth'|'custom'
+  customStart: null,    // 'YYYY-MM-DD'
+  customEnd:   null,
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  VALUE PARSER  (handles "$168.41", "9.58%", "2,876", plain numbers)
+// ═══════════════════════════════════════════════════════════════════
+function parseVal(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const s = String(v).replace(/[$,%\s]/g, '').replace(/,/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DATE RANGE HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function getDateRangeBounds() {
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (state.dateRange) {
+    case 'last7': {
+      const start = new Date(today); start.setDate(today.getDate() - 6);
+      return { start, end: today };
+    }
+    case 'last14': {
+      const start = new Date(today); start.setDate(today.getDate() - 13);
+      return { start, end: today };
+    }
+    case 'last30': {
+      const start = new Date(today); start.setDate(today.getDate() - 29);
+      return { start, end: today };
+    }
+    case 'month': {
+      const start = new Date(state.year, state.month - 1, 1);
+      const end   = new Date(state.year, state.month, 0);
+      return { start, end: today <= end ? today : end };
+    }
+    case 'lastMonth': {
+      const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const end   = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { start, end };
+    }
+    case 'custom': {
+      if (!state.customStart || !state.customEnd) return null;
+      return {
+        start: new Date(state.customStart + 'T00:00:00'),
+        end:   new Date(state.customEnd   + 'T00:00:00'),
+      };
+    }
+  }
+  return null;
+}
+
+// All days with data for the current campaign, sorted ascending.
+// Future days are excluded so preset ranges don't include pre-filled sheet rows.
+function getAllCampaignDays() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const result = [];
+  for (const [key, md] of Object.entries(DATA)) {
+    if (!key.startsWith(state.campaign + '/')) continue;
+    const [, yearMonth] = key.split('/');
+    const [yr, mo] = yearMonth.split('-').map(Number);
+    for (const [dayKey, dayData] of Object.entries(md.days)) {
+      const date = new Date(yr, mo - 1, parseInt(dayKey));
+      if (date <= today) result.push({ date, data: dayData });
+    }
+  }
+  return result.sort((a, b) => a.date - b.date);
+}
+
+// Calendar-based range filter (used for month / lastMonth / custom)
+function getDaysInRange(start, end) {
+  const result = [];
+  for (const [key, md] of Object.entries(DATA)) {
+    if (!key.startsWith(state.campaign + '/')) continue;
+    const [, yearMonth] = key.split('/');
+    const [yr, mo] = yearMonth.split('-').map(Number);
+    for (const [dayKey, dayData] of Object.entries(md.days)) {
+      const date = new Date(yr, mo - 1, parseInt(dayKey));
+      if (date >= start && date <= end) result.push({ date, data: dayData });
+    }
+  }
+  return result.sort((a, b) => a.date - b.date);
+}
+
+// Preset ranges count the N most recent data days (not calendar days),
+// so gaps in the campaign don't leave the window empty.
+const PRESET_N = { last7: 7, last14: 14, last30: 30 };
+
+function getFilteredDays() {
+  const n = PRESET_N[state.dateRange];
+  if (n) return getAllCampaignDays().slice(-n);
+
+  const bounds = getDateRangeBounds();
+  if (!bounds) return [];
+  return getDaysInRange(bounds.start, bounds.end);
+}
+
+// The N data days immediately before the current window
+function getPreviousPeriodDays() {
+  const n = PRESET_N[state.dateRange];
+  if (n) {
+    const all = getAllCampaignDays();
+    const end = Math.max(0, all.length - n);
+    return all.slice(Math.max(0, end - n), end);
+  }
+
+  const bounds = getDateRangeBounds();
+  if (!bounds) return [];
+  const { start, end } = bounds;
+  const duration = end.getTime() - start.getTime() + 86400000;
+  const prevEnd   = new Date(start.getTime() - 86400000);
+  const prevStart = new Date(prevEnd.getTime() - duration + 86400000);
+  return getDaysInRange(prevStart, prevEnd);
+}
+
+// % change helper
+function changeBadge(curr, prev, invertGood = false) {
+  if (!prev || prev === 0) return '';
+  const pct = ((curr - prev) / Math.abs(prev)) * 100;
+  const good = invertGood ? pct < 0 : pct > 0;
+  const sign = pct > 0 ? '+' : '';
+  return `<span class="chg chg-${good ? 'pos' : 'neg'}">${sign}${pct.toFixed(1)}% vs prev</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SHEET PARSER
+//  Reads the rows returned by Apps Script and maps them to our data format.
+//
+//  Sheet layout (sheet row numbers, 1-indexed):
+//    Row 5  → Day headers: col B empty, col C="D1", col D="D2", …
+//    Rows 9-34 (col B) → Metric labels; col C onward = daily data
+//
+//  ROW_OFFSET = rows below the D1 header row (sheet row 5):
+//    +4  → Amount Spent     (sheet row 9)
+//    +5  → Impressions      (sheet row 10)   … etc.
+//
+//  We auto-detect the D1 row by scanning, so getDataRange() offset
+//  differences between sheets don't break parsing.
+// ═══════════════════════════════════════════════════════════════════
+const ROW_OFFSET = {
+  amountSpent:       4,
+  impressions:       5,
+  cpm:               6,
+  ctr:               7,
+  frequency:         8,
+  linkClicks:        9,
+  cpc:               10,
+  landingPageViews:  11,
+  costPerLpv:        12,
+  lpViewRate:        13,
+  lpToFormView:      14,
+  formSubs:          15,
+  costPerSubmission: 16,
+  formStartRate:     17,
+  formConvRate:      18,
+  callsBooked:       19,
+  costPerCall:       20,
+  bookingRate:       21,
+  numberOfSales:     22,
+  costPerDeal:       23,
+  revenue:           24,
+  cashCollected:     25,
+  roasRevenue:       26,
+  roasCC:            27,
+  subToBooking:      28,
+  bookingToSale:     29,
+};
+
+// rows is a 2D array returned by Apps Script getDisplayValues()
+// Returns an ARRAY of { key, data } — one per calendar month found in the sheet.
+function parseSheet(rows, sheetConfig) {
+  if (!Array.isArray(rows) || rows.length < 5) return [];
+
+  // Auto-detect the row containing "D1"
+  let dayHeaderIdx = -1;
+  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    const row = rows[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      if (/^D1$/i.test((row[c] || '').trim())) { dayHeaderIdx = r; break; }
+    }
+    if (dayHeaderIdx >= 0) break;
+  }
+  if (dayHeaderIdx < 0) return [];
+
+  const dayHeaderRow = rows[dayHeaderIdx];
+  // Row directly below D1/D2/… contains the real dates (e.g. "04/01", "03/15")
+  const dateRow = rows[dayHeaderIdx + 1] || [];
+
+  // Infer year from sheet name as fallback when date string has no year
+  const nameParts = sheetConfig.name.toLowerCase().split('-');
+  const sheetMonthNum = MONTH_MAP[nameParts[nameParts.length - 1]] || 0;
+  const now = new Date();
+  const fallbackYear = (sheetMonthNum && sheetMonthNum > now.getMonth() + 2)
+    ? now.getFullYear() - 1
+    : now.getFullYear();
+
+  // Collect days grouped by calendar month
+  const byMonth = {}; // "campaign/YYYY-MM" → { "DD": metrics }
+
+  for (let col = 0; col < dayHeaderRow.length; col++) {
+    // Only process columns that have a D-header (D1, D2, …)
+    if (!/^D\d+$/i.test((dayHeaderRow[col] || '').trim())) continue;
+
+    const dateStr = (dateRow[col] || '').trim();
+    if (!dateStr) continue;
+
+    // Parse MM/DD or MM/DD/YYYY
+    const dp = dateStr.split('/');
+    if (dp.length < 2) continue;
+    const mo = parseInt(dp[0]);
+    const dd = parseInt(dp[1]);
+    if (!mo || !dd) continue;
+
+    const yr = dp.length >= 3 && dp[2]
+      ? (parseInt(dp[2]) < 100 ? parseInt(dp[2]) + 2000 : parseInt(dp[2]))
+      : fallbackYear;
+
+    const monthKey = `${sheetConfig.campaign}/${yr}-${String(mo).padStart(2,'0')}`;
+    const dayKey   = String(dd).padStart(2, '0');
+    const get      = offset => parseVal((rows[dayHeaderIdx + offset] || [])[col]);
+
+    if (!byMonth[monthKey]) byMonth[monthKey] = {};
+    byMonth[monthKey][dayKey] = Object.fromEntries(
+      Object.entries(ROW_OFFSET).map(([k, offset]) => [k, get(offset)])
+    );
+  }
+
+  return Object.entries(byMonth).map(([key, days]) => ({ key, data: { days } }));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FETCHING  (via Google Apps Script Web App — avoids CORS issues)
+// ═══════════════════════════════════════════════════════════════════
+async function fetchSheetData(sheetName) {
+  if (!WEBAPP_URL || WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE') {
+    throw new Error('WEBAPP_URL not set — see setup instructions');
+  }
+  const url = `${WEBAPP_URL}?sheet=${encodeURIComponent(sheetName)}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
+  if (data && data.error) throw new Error(data.error);
+  return data; // 2D array from getDisplayValues()
+}
+
+// force=true skips cache (used by Refresh button and auto-refresh timer)
+async function loadData(force = false) {
+  if (!force) {
+    const ts = tryLoadCache();
+    if (ts) {
+      showLoading(false);
+      document.getElementById('lastUpdated').textContent = `Cached ${fmtCacheAge(ts)}`;
+      refresh();
+      // Trigger a silent background re-fetch so data stays fresh
+      loadData(true);
+      return;
+    }
+  }
+
+  // Show setup message if URL not configured
+  if (!WEBAPP_URL || WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE') {
+    showLoading(false);
+    showError(
+      '⚙️ Setup needed: Deploy Code.gs as an Apps Script Web App and paste the URL into WEBAPP_URL in this file. ' +
+      'See the instructions at the top of the script section.'
+    );
+    return;
+  }
+
+  showLoading(true);
+  hideError();
+
+  const btn  = document.getElementById('refreshBtn');
+  const icon = document.getElementById('refreshIcon');
+  btn.disabled = true;
+  icon.style.animation = 'spin .7s linear infinite';
+
+  const errors = [];
+  let loaded = 0;
+
+  await Promise.all(SHEETS.map(async (sheetCfg) => {
+    try {
+      document.getElementById('loadingText').textContent = `Loading ${sheetCfg.name}…`;
+      const rows    = await fetchSheetData(sheetCfg.name);
+      const results = parseSheet(rows, sheetCfg);
+      if (results.length) {
+        results.forEach(r => { DATA[r.key] = r.data; });
+        loaded++;
+      } else {
+        errors.push(`${sheetCfg.name}: could not parse (no date row found)`);
+      }
+    } catch (err) {
+      errors.push(`${sheetCfg.name}: ${err.message}`);
+    }
+  }));
+
+  btn.disabled = false;
+  icon.style.animation = '';
+  showLoading(false);
+
+  if (loaded > 0) saveCache();
+
+  if (errors.length) showError(`Could not load: ${errors.join(' | ')}`);
+
+  document.getElementById('lastUpdated').textContent =
+    loaded ? `Synced ${new Date().toLocaleTimeString()}` : '';
+
+  refresh();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CACHE  (localStorage — instant loads, 5-min background refresh)
+// ═══════════════════════════════════════════════════════════════════
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: DATA }));
+  } catch (_) { /* storage full or private mode */ }
+}
+
+// Returns cached timestamp (ms) if cache is fresh, false otherwise
+function tryLoadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) return false;
+    DATA = data;
+    return ts;
+  } catch (_) { return false; }
+}
+
+function fmtCacheAge(ts) {
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60)  return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+// Auto-refresh every 5 min silently in background
+setInterval(() => loadData(true), CACHE_TTL);
+
+// ═══════════════════════════════════════════════════════════════════
+//  FORMATTERS
+// ═══════════════════════════════════════════════════════════════════
+const F = {
+  $:   v => !v && v !== 0 ? '—' : (v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v.toFixed(0)}`),
+  $$:  v => !v && v !== 0 ? '—' : `$${v.toLocaleString('en-US',{maximumFractionDigits:0})}`,
+  n:   v => !v && v !== 0 ? '—' : (v >= 1000 ? `${(v/1000).toFixed(1)}k` : `${Math.round(v)}`),
+  '%': v => !v && v !== 0 ? '—' : `${v.toFixed(1)}%`,
+  dec: v => !v && v !== 0 ? '—' : v.toFixed(2),
+  x:   v => !v && v !== 0 ? '—' : `${v.toFixed(2)}x`,
+  cpm: v => !v && v !== 0 ? '—' : `$${v.toFixed(2)}`,
+};
+
+function fmtV(v, f) { return F[f] ? F[f](v) : String(v); }
+
+// ═══════════════════════════════════════════════════════════════════
+//  KPI DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════
+const KPIS = {
+  awareness: [
+    { key: 'amountSpent',  label: 'Amount Spent',  fmt: '$',   hl: 'blue'                },
+    { key: 'impressions',  label: 'Impressions',   fmt: 'n'                              },
+    { key: 'cpm',          label: 'CPM',           fmt: 'cpm', invertGood: true          },
+    { key: 'ctr',          label: 'CTR',           fmt: '%'                              },
+    { key: 'frequency',    label: 'Frequency',     fmt: 'dec'                            },
+    { key: 'linkClicks',   label: 'Link Clicks',   fmt: 'n'                              },
+    { key: 'cpc',          label: 'CPC',           fmt: '$',   invertGood: true          },
+  ],
+  capture: [
+    { key: 'landingPageViews', label: 'Landing Page Views', fmt: 'n',  hl: 'purple'     },
+    { key: 'costPerLpv',       label: 'Cost per LPV',       fmt: '$',  invertGood: true  },
+    { key: 'lpViewRate',       label: 'LP View Rate',        fmt: '%'                    },
+    { key: 'lpToFormView',     label: 'LP → Form View',      fmt: '%'                    },
+  ],
+  engagement: [
+    { key: 'formSubs',          label: 'Form Submissions',    fmt: 'n',  hl: 'amber'     },
+    { key: 'costPerSubmission', label: 'Cost per Submission', fmt: '$',  invertGood: true },
+    { key: 'formStartRate',     label: 'Form Start Rate',     fmt: '%'                   },
+    { key: 'formConvRate',      label: 'Form Conv. Rate',     fmt: '%'                   },
+  ],
+  sales: [
+    { key: 'callsBooked',   label: 'Calls Booked',    fmt: 'n',  hl: 'green'            },
+    { key: 'costPerCall',   label: 'Cost per Call',   fmt: '$',  invertGood: true        },
+    { key: 'bookingRate',   label: 'Booking Rate',    fmt: '%'                           },
+    { key: 'numberOfSales', label: 'Number of Sales', fmt: 'n',  hl: 'green'            },
+    { key: 'costPerDeal',   label: 'Cost per Deal',   fmt: '$',  invertGood: true        },
+    { key: 'revenue',       label: 'Revenue',         fmt: '$$', hl: 'green'            },
+    { key: 'cashCollected', label: 'Cash Collected',  fmt: '$$', hl: 'green'            },
+    { key: 'roasRevenue',   label: 'ROAS (Revenue)',  fmt: 'x',  hl: 'green'            },
+    { key: 'roasCC',        label: 'ROAS (CC)',       fmt: 'x',  hl: 'green'            },
+    { key: 'subToBooking',  label: 'Sub → Booking',   fmt: '%'                          },
+    { key: 'bookingToSale', label: 'Booking → Sale',  fmt: '%'                          },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  AGGREGATION
+// ═══════════════════════════════════════════════════════════════════
+function getMonthKey() {
+  const { campaign, year, month } = state;
+  return `${campaign}/${year}-${String(month).padStart(2,'0')}`;
+}
+
+function getMonthData() {
+  return DATA[getMonthKey()] || null;
+}
+
+function aggregate(filteredDays) {
+  if (!filteredDays || !filteredDays.length) return null;
+  const rows = filteredDays.map(fd => fd.data);
+
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  const avg = k => sum(k) / rows.length;
+
+  const spend  = sum('amountSpent');
+  const impr   = sum('impressions');
+  const clicks = sum('linkClicks');
+  const lpv    = sum('landingPageViews');
+  const subs   = sum('formSubs');
+  const calls  = sum('callsBooked');
+  const sales  = sum('numberOfSales');
+  const rev    = sum('revenue');
+  const cc     = sum('cashCollected');
+
+  return {
+    amountSpent:       spend,
+    impressions:       impr,
+    cpm:               impr   > 0 ? spend / impr   * 1000 : 0,
+    ctr:               impr   > 0 ? clicks / impr  * 100  : 0,
+    frequency:         avg('frequency'),
+    linkClicks:        clicks,
+    cpc:               clicks > 0 ? spend / clicks : 0,
+    landingPageViews:  lpv,
+    costPerLpv:        lpv    > 0 ? spend / lpv    : 0,
+    lpViewRate:        clicks > 0 ? lpv / clicks   * 100  : 0,
+    lpToFormView:      avg('lpToFormView'),
+    formSubs:          subs,
+    costPerSubmission: subs   > 0 ? spend / subs   : 0,
+    formStartRate:     avg('formStartRate'),
+    formConvRate:      avg('formConvRate'),
+    callsBooked:       calls,
+    costPerCall:       calls  > 0 ? spend / calls  : 0,
+    bookingRate:       subs   > 0 ? calls / subs   * 100  : 0,
+    numberOfSales:     sales,
+    costPerDeal:       sales  > 0 ? spend / sales  : 0,
+    revenue:           rev,
+    cashCollected:     cc,
+    roasRevenue:       spend  > 0 ? rev / spend    : 0,
+    roasCC:            spend  > 0 ? cc  / spend    : 0,
+    subToBooking:      subs   > 0 ? calls / subs   * 100  : 0,
+    bookingToSale:     calls  > 0 ? sales / calls  * 100  : 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER KPI GRIDS
+// ═══════════════════════════════════════════════════════════════════
+function renderGrid(id, kpis, data, prevData) {
+  if (!data) {
+    document.getElementById(id).innerHTML =
+      '<div class="no-data">No data for this period</div>';
+    return;
+  }
+  document.getElementById(id).innerHTML = kpis.map(k => {
+    const chg = prevData ? changeBadge(data[k.key], prevData[k.key], k.invertGood) : '';
+    return `<div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value${k.hl ? ` hl-${k.hl}` : ''}">${fmtV(data[k.key], k.fmt)}</div>
+      <div class="kpi-change">${chg}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER FUNNEL OVERVIEW
+// ═══════════════════════════════════════════════════════════════════
+function renderFunnel(d, prev) {
+  const set     = (id, txt)  => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML  = html; };
+  const chgIds  = ['fo-spend-change','fo-lpv-change','fo-subs-change','fo-revenue-change'];
+
+  if (!d) {
+    ['fo-spend','fo-impressions','fo-lpv','fo-lpvrate',
+     'fo-subs','fo-convrate','fo-revenue','fo-roas'].forEach(id => set(id, '—'));
+    chgIds.forEach(id => setHtml(id, ''));
+    return;
+  }
+
+  set('fo-spend',       F['$'](d.amountSpent));
+  set('fo-impressions', F.n(d.impressions) + ' impressions');
+  set('fo-lpv',         F.n(d.landingPageViews));
+  set('fo-lpvrate',     F['%'](d.lpViewRate) + ' LP view rate');
+  set('fo-subs',        F.n(d.formSubs));
+  set('fo-convrate',    F['%'](d.formConvRate) + ' form conversion');
+  set('fo-revenue',     F['$'](d.revenue));
+  set('fo-roas',        F.x(d.roasRevenue) + ' ROAS');
+
+  if (prev) {
+    setHtml('fo-spend-change',   changeBadge(d.amountSpent,      prev.amountSpent));
+    setHtml('fo-lpv-change',     changeBadge(d.landingPageViews, prev.landingPageViews));
+    setHtml('fo-subs-change',    changeBadge(d.formSubs,         prev.formSubs));
+    setHtml('fo-revenue-change', changeBadge(d.revenue,          prev.revenue));
+  } else {
+    chgIds.forEach(id => setHtml(id, ''));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════════════════════════
+let lineInst = null, funnelInst = null, roasTrendInst = null, pipelineInst = null;
+
+function renderCharts(filteredDays, agg) {
+  const labels = filteredDays.map(fd => {
+    const d = fd.date;
+    return d.toLocaleString('default', { month: 'short' }) + ' ' + d.getDate();
+  });
+  const spends = filteredDays.map(fd => fd.data.amountSpent);
+  const revs   = filteredDays.map(fd => fd.data.revenue);
+  const ccs    = filteredDays.map(fd => fd.data.cashCollected);
+
+  const lCtx = document.getElementById('lineChart').getContext('2d');
+  if (lineInst) lineInst.destroy();
+  lineInst = new Chart(lCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Spend',          data: spends, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.07)',
+          fill:true, tension:.4, pointRadius:2, borderWidth:2 },
+        { label:'Revenue',        data: revs,   borderColor:'#059669', backgroundColor:'rgba(5,150,105,.05)',
+          fill:true, tension:.4, pointRadius:2, borderWidth:2 },
+        { label:'Cash Collected', data: ccs,    borderColor:'#d97706', backgroundColor:'rgba(217,119,6,.04)',
+          fill:true, tension:.4, pointRadius:1, borderWidth:1.5, borderDash:[4,3] },
+      ],
+    },
+    options: {
+      responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(0)}` } }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{size:10},color:isDark()?'#555':'#999'} },
+        y:{ grid:{color:isDark()?'#2a2a2a':'#f0f0f0'}, ticks:{font:{size:10},color:isDark()?'#555':'#999',
+          callback: v => v>=1000?`$${(v/1000).toFixed(0)}k`:`$${v}` } },
+      },
+    },
+  });
+
+  const fCtx = document.getElementById('funnelChart').getContext('2d');
+  if (funnelInst) funnelInst.destroy();
+  funnelInst = new Chart(fCtx, {
+    type:'bar',
+    data:{
+      labels:['Clicks','LPVs','Subs','Calls','Sales'],
+      datasets:[{
+        data: agg
+          ? [agg.linkClicks, agg.landingPageViews, agg.formSubs, agg.callsBooked, agg.numberOfSales]
+          : [0,0,0,0,0],
+        backgroundColor:['#bfdbfe','#ddd6fe','#fde68a','#6ee7b7','#34d399'],
+        borderColor:    ['#2563eb','#7c3aed','#d97706','#059669','#059669'],
+        borderWidth:1.5, borderRadius:6,
+      }],
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ` ${Math.round(ctx.parsed.y).toLocaleString()}` } }
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{font:{size:10},color:isDark()?'#555':'#999'} },
+        y:{ grid:{color:isDark()?'#2a2a2a':'#f0f0f0'}, ticks:{font:{size:10},color:isDark()?'#555':'#999',
+          callback: v => v>=1000?`${(v/1000).toFixed(0)}k`:v } },
+      },
+    },
+  });
+
+  // ── Daily ROAS (bar, green/red per day) ──
+  const roasVals = filteredDays.map(fd => fd.data.roasRevenue);
+  const rtCtx = document.getElementById('roasTrendChart').getContext('2d');
+  if (roasTrendInst) roasTrendInst.destroy();
+  roasTrendInst = new Chart(rtCtx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: roasVals,
+        backgroundColor: roasVals.map(v => v >= 1 ? 'rgba(5,150,105,0.75)' : 'rgba(220,38,38,0.65)'),
+        borderColor:     roasVals.map(v => v >= 1 ? '#059669' : '#dc2626'),
+        borderWidth: 1.5, borderRadius: 5,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ROAS: ${ctx.parsed.y.toFixed(2)}x` } },
+        annotation: undefined,
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+        y: { grid: { color: isDark()?'#2a2a2a':'#f0f0f0' }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999',
+          callback: v => `${v.toFixed(0)}x` } },
+      },
+    },
+  });
+
+  // ── Pipeline Quality (conversion % at each key stage) ──
+  const lpvToSub  = filteredDays.map(fd => fd.data.lpToFormView   || 0);
+  const subToCall = filteredDays.map(fd => fd.data.bookingRate     || 0);
+  const callToSale= filteredDays.map(fd => fd.data.bookingToSale   || 0);
+  const pCtx = document.getElementById('pipelineChart').getContext('2d');
+  if (pipelineInst) pipelineInst.destroy();
+  pipelineInst = new Chart(pCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'LPV→Sub %',  data: lpvToSub,   borderColor: '#d97706',
+          backgroundColor: 'rgba(217,119,6,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+        { label: 'Sub→Call %', data: subToCall,  borderColor: '#059669',
+          backgroundColor: 'rgba(5,150,105,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+        { label: 'Call→Sale %',data: callToSale, borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+      ],
+    },
+    options: {
+      responsive: true, interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+        y: { grid: { color: isDark()?'#2a2a2a':'#f0f0f0' }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999',
+          callback: v => `${v.toFixed(0)}%` } },
+      },
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DAILY TABLE
+// ═══════════════════════════════════════════════════════════════════
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+
+function renderTable(filteredDays) {
+  const sub = document.getElementById('tableSubtitle');
+
+  if (!filteredDays.length) {
+    sub.textContent = 'No data';
+    document.getElementById('tableHead').innerHTML = '';
+    document.getElementById('tableBody').innerHTML =
+      '<tr><td colspan="99" style="text-align:center;padding:36px;color:#999">No data for this period</td></tr>';
+    return;
+  }
+
+  sub.textContent = `${filteredDays.length} days`;
+
+  document.getElementById('tableHead').innerHTML = `
+    <tr>
+      <th rowspan="2" style="text-align:left;vertical-align:bottom">Day</th>
+      <th colspan="7" class="th-group th-awareness">TOFU Awareness</th>
+      <th colspan="4" class="th-group th-capture">TOFU Capture</th>
+      <th colspan="4" class="th-group th-engagement">MOFU Engagement</th>
+      <th colspan="8" class="th-group th-sales">BOFU Sales</th>
+    </tr>
+    <tr>
+      <th>Spent</th><th>Impressions</th><th>CPM</th><th>CTR</th><th>Freq</th><th>Clicks</th><th>CPC</th>
+      <th>LPVs</th><th>Cost/LPV</th><th>LPV Rate</th><th>LP→Form</th>
+      <th>Subs</th><th>Cost/Sub</th><th>Start Rate</th><th>Conv Rate</th>
+      <th>Calls</th><th>Cost/Call</th><th>Sales</th><th>Revenue</th><th>CC</th><th>ROAS Rev</th><th>ROAS CC</th><th>Sub→Book</th>
+    </tr>`;
+
+  document.getElementById('tableBody').innerHTML = filteredDays.map(fd => {
+    const dt = fd.date;
+    const label = dt.toLocaleString('default', { month: 'short' }) + ' ' + dt.getDate();
+    const d = fd.data;
+    return `
+    <tr>
+      <td>${label}</td>
+      <td>${F['$'](d.amountSpent)}</td>
+      <td>${F.n(d.impressions)}</td>
+      <td>${F.cpm(d.cpm)}</td>
+      <td>${F['%'](d.ctr)}</td>
+      <td>${F.dec(d.frequency)}</td>
+      <td>${F.n(d.linkClicks)}</td>
+      <td>${F['$'](d.cpc)}</td>
+      <td>${F.n(d.landingPageViews)}</td>
+      <td>${F['$'](d.costPerLpv)}</td>
+      <td>${F['%'](d.lpViewRate)}</td>
+      <td>${F['%'](d.lpToFormView)}</td>
+      <td>${F.n(d.formSubs)}</td>
+      <td>${F['$'](d.costPerSubmission)}</td>
+      <td>${F['%'](d.formStartRate)}</td>
+      <td>${F['%'](d.formConvRate)}</td>
+      <td>${F.n(d.callsBooked)}</td>
+      <td>${F['$'](d.costPerCall)}</td>
+      <td>${F.n(d.numberOfSales)}</td>
+      <td>${F['$'](d.revenue)}</td>
+      <td>${F['$'](d.cashCollected)}</td>
+      <td>${F.x(d.roasRevenue)}</td>
+      <td>${F.x(d.roasCC)}</td>
+      <td>${F['%'](d.subToBooking)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TRENDS CHARTS
+// ═══════════════════════════════════════════════════════════════════
+let roasInst = null, costInst = null, volumeInst = null, rateInst = null;
+
+function renderTrendCharts(filteredDays) {
+  const labels = filteredDays.map(fd => {
+    const d = fd.date;
+    return d.toLocaleString('default', { month: 'short' }) + ' ' + d.getDate();
+  });
+
+  const mkLine = (ctx, datasets) => ({
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+        y: { grid: { color: isDark()?'#2a2a2a':'#f0f0f0' }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+      },
+    },
+  });
+
+  const d = id => document.getElementById(id).getContext('2d');
+
+  if (roasInst) roasInst.destroy();
+  roasInst = new Chart(d('roasChart'), mkLine(null, [
+    { label: 'Rev ROAS', data: filteredDays.map(f => f.data.roasRevenue),
+      borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'CC ROAS',  data: filteredDays.map(f => f.data.roasCC),
+      borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.04)', fill: true, tension: .4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+  ]));
+
+  if (costInst) costInst.destroy();
+  costInst = new Chart(d('costChart'), mkLine(null, [
+    { label: 'Cost/Sub',  data: filteredDays.map(f => f.data.costPerSubmission),
+      borderColor: '#7c3aed', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Cost/Call', data: filteredDays.map(f => f.data.costPerCall),
+      borderColor: '#059669', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Cost/Deal', data: filteredDays.map(f => f.data.costPerDeal),
+      borderColor: '#dc2626', tension: .4, pointRadius: 2, borderWidth: 2 },
+  ]));
+
+  if (volumeInst) volumeInst.destroy();
+  volumeInst = new Chart(d('volumeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Subs',  data: filteredDays.map(f => f.data.formSubs),     backgroundColor: '#ddd6fe', borderRadius: 3 },
+        { label: 'Calls', data: filteredDays.map(f => f.data.callsBooked),  backgroundColor: '#6ee7b7', borderRadius: 3 },
+        { label: 'Sales', data: filteredDays.map(f => f.data.numberOfSales),backgroundColor: '#fde68a', borderRadius: 3 },
+      ],
+    },
+    options: {
+      responsive: true, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { stacked: false, grid: { display: false }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+        y: { grid: { color: isDark()?'#2a2a2a':'#f0f0f0' }, ticks: { font: { size: 10 }, color: isDark()?'#555':'#999' } },
+      },
+    },
+  });
+
+  if (rateInst) rateInst.destroy();
+  rateInst = new Chart(d('rateChart'), mkLine(null, [
+    { label: 'CTR',          data: filteredDays.map(f => f.data.ctr),
+      borderColor: '#2563eb', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Booking Rate', data: filteredDays.map(f => f.data.bookingRate),
+      borderColor: '#059669', tension: .4, pointRadius: 2, borderWidth: 2 },
+  ]));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SUMMARY CARDS (shared between Overview and Insights)
+// ═══════════════════════════════════════════════════════════════════
+const SUMMARY_DEFS = [
+  { label: 'Total Spend',    key: 'amountSpent',   fmt: '$$', inv: false, color: ''              },
+  { label: 'Total Revenue',  key: 'revenue',        fmt: '$$', inv: false, color: 'var(--green)'  },
+  { label: 'Cash Collected', key: 'cashCollected',  fmt: '$$', inv: false, color: 'var(--green)'  },
+  { label: 'ROAS (Revenue)', key: 'roasRevenue',    fmt: 'x',  inv: false, color: 'var(--blue)'   },
+  { label: 'Total Leads',    key: 'formSubs',       fmt: 'n',  inv: false, color: ''              },
+  { label: 'Calls Booked',   key: 'callsBooked',    fmt: 'n',  inv: false, color: ''              },
+  { label: 'Sales Closed',   key: 'numberOfSales',  fmt: 'n',  inv: false, color: 'var(--green)'  },
+  { label: 'Cost per Deal',  key: 'costPerDeal',    fmt: '$',  inv: true,  color: ''              },
+];
+
+function renderSummaryCards(agg, prevAgg) {
+  const noData = '<div class="no-data">No data for this period</div>';
+  const html = agg
+    ? SUMMARY_DEFS.map(c => `
+        <div class="insight-card">
+          <div class="insight-label">${c.label}</div>
+          <div class="insight-val"${c.color ? ` style="color:${c.color}"` : ''}>${fmtV(agg[c.key], c.fmt)}</div>
+          ${prevAgg ? changeBadge(agg[c.key], prevAgg[c.key], c.inv) : ''}
+        </div>`).join('')
+    : noData;
+
+  const ovEl = document.getElementById('overview-summary');
+  if (ovEl) ovEl.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INSIGHTS
+// ═══════════════════════════════════════════════════════════════════
+function buildHighlightCards(active) {
+  if (!active.length) return '';
+  const bestRoas  = active.reduce((b, fd) => fd.data.roasRevenue > b.data.roasRevenue ? fd : b, active[0]);
+  const worstRoas = active.reduce((b, fd) => fd.data.roasRevenue < b.data.roasRevenue ? fd : b, active[0]);
+  const bestRev   = active.reduce((b, fd) => fd.data.revenue     > b.data.revenue     ? fd : b, active[0]);
+  const fmtDt     = d => d.toLocaleString('default', { month: 'short', day: 'numeric' });
+  return `
+    <div class="highlight-row">
+      <div class="highlight-card">
+        <div class="hc-tag">🏆 Best ROAS Day</div>
+        <div class="hc-date">${fmtDt(bestRoas.date)}</div>
+        <div class="hc-val" style="color:var(--blue)">${F.x(bestRoas.data.roasRevenue)}</div>
+        <div class="hc-sub">$${bestRoas.data.amountSpent.toFixed(0)} spent → $${bestRoas.data.revenue.toFixed(0)} revenue</div>
+      </div>
+      <div class="highlight-card">
+        <div class="hc-tag">📈 Best Revenue Day</div>
+        <div class="hc-date">${fmtDt(bestRev.date)}</div>
+        <div class="hc-val" style="color:var(--green)">${F['$$'](bestRev.data.revenue)}</div>
+        <div class="hc-sub">${F.n(bestRev.data.numberOfSales)} sales · ${F.x(bestRev.data.roasRevenue)} ROAS</div>
+      </div>
+      <div class="highlight-card">
+        <div class="hc-tag">📉 Worst ROAS Day</div>
+        <div class="hc-date">${fmtDt(worstRoas.date)}</div>
+        <div class="hc-val" style="color:var(--red)">${F.x(worstRoas.data.roasRevenue)}</div>
+        <div class="hc-sub">$${worstRoas.data.amountSpent.toFixed(0)} spent → $${worstRoas.data.revenue.toFixed(0)} revenue</div>
+      </div>
+    </div>`;
+}
+
+function renderHighlights(filteredDays) {
+  const el = document.getElementById('overview-highlights');
+  const active = filteredDays.filter(fd => fd.data.amountSpent > 0);
+  el.innerHTML = buildHighlightCards(active);
+}
+
+function renderInsights(filteredDays, agg, prevAgg) {
+  const el = document.getElementById('insightsContent');
+  if (!filteredDays.length || !agg) {
+    el.innerHTML = '<div class="no-data">No data for this period</div>';
+    return;
+  }
+
+  const active = filteredDays.filter(fd => fd.data.amountSpent > 0);
+  if (!active.length) { el.innerHTML = '<div class="no-data">No spend data found</div>'; return; }
+
+  const summaryCards = SUMMARY_DEFS.map(c => `
+    <div class="insight-card">
+      <div class="insight-label">${c.label}</div>
+      <div class="insight-val"${c.color ? ` style="color:${c.color}"` : ''}>${fmtV(agg[c.key], c.fmt)}</div>
+      ${prevAgg ? changeBadge(agg[c.key], prevAgg[c.key], c.inv) : ''}
+    </div>`).join('');
+
+  const funnelSteps = [
+    ['Impressions → Clicks', agg.ctr,          'var(--blue)'],
+    ['Clicks → LPVs',        agg.lpViewRate,   'var(--purple)'],
+    ['LPVs → Subs',          agg.lpToFormView, 'var(--amber)'],
+    ['Subs → Calls',         agg.bookingRate,  'var(--green)'],
+    ['Calls → Sales',        agg.bookingToSale,'var(--green)'],
+  ].map(([label, val, color]) => `
+    <div class="fe-row">
+      <div class="fe-label">${label}</div>
+      <div class="fe-bar-wrap"><div class="fe-bar" style="width:${Math.min(100,Math.max(0,val))}%;background:${color}"></div></div>
+      <div class="fe-val">${val.toFixed(1)}%</div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="insights-grid">${summaryCards}</div>
+    ${buildHighlightCards(active)}
+    <div class="section">
+      <div class="section-head">
+        <span class="section-name">Funnel Efficiency</span>
+        <span class="section-desc">Conversion rates at each stage</span>
+      </div>
+      <div class="funnel-eff">${funnelSteps}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+function setTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(el =>
+    el.classList.toggle('active', el.id === `tab-${tab}`));
+
+  // Charts in display:none containers have 0 dimensions; resize after reveal
+  setTimeout(() => {
+    if (tab === 'overview') {
+      if (lineInst)       lineInst.resize();
+      if (funnelInst)     funnelInst.resize();
+      if (roasTrendInst)  roasTrendInst.resize();
+      if (pipelineInst)   pipelineInst.resize();
+    }
+    if (tab === 'trends') {
+      if (roasInst)   roasInst.resize();
+      if (costInst)   costInst.resize();
+      if (volumeInst) volumeInst.resize();
+      if (rateInst)   rateInst.resize();
+    }
+  }, 30);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  REFRESH (re-render from cached DATA)
+// ═══════════════════════════════════════════════════════════════════
+function refresh() {
+  // Date picker button label
+  const RANGE_LABELS = {
+    last7:     'Last 7 Days',
+    last14:    'Last 14 Days',
+    last30:    'Last 30 Days',
+    month:     `${MONTH_NAMES[state.month - 1]} ${state.year}`,
+    lastMonth: 'Last Month',
+    custom:    state.customStart && state.customEnd
+                 ? `${state.customStart} → ${state.customEnd}`
+                 : 'Custom Range',
+  };
+  document.getElementById('dpLabel').textContent =
+    RANGE_LABELS[state.dateRange] || 'Select Range';
+
+  const filteredDays = getFilteredDays();
+  const prevDays     = getPreviousPeriodDays();
+  const agg          = aggregate(filteredDays);
+  const prevAgg      = aggregate(prevDays);
+
+  renderSummaryCards(agg, prevAgg);
+  renderHighlights(filteredDays);
+  renderFunnel(agg, prevAgg);
+  renderGrid('grid-awareness',  KPIS.awareness,  agg, prevAgg);
+  renderGrid('grid-capture',    KPIS.capture,    agg, prevAgg);
+  renderGrid('grid-engagement', KPIS.engagement, agg, prevAgg);
+  renderGrid('grid-sales',      KPIS.sales,      agg, prevAgg);
+  renderCharts(filteredDays, agg);
+  renderTrendCharts(filteredDays);
+  renderTable(filteredDays);
+  renderInsights(filteredDays, agg, prevAgg);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+function changeMonth(delta) {
+  state.month += delta;
+  if (state.month > 12) { state.month = 1;  state.year++; }
+  if (state.month < 1)  { state.month = 12; state.year--; }
+  refresh();
+}
+
+function setCampaign(camp, btn) {
+  state.campaign = camp;
+  document.querySelectorAll('#campaignToggle .pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  refresh();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DATE PICKER CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+function toggleDatePicker() {
+  const panel = document.getElementById('dpPanel');
+  const btn   = document.getElementById('dpBtn');
+  const open  = panel.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  if (open) {
+    setTimeout(() =>
+      document.addEventListener('click', _closeDatePickerOutside, { once: true }), 0);
+  }
+}
+
+function _closeDatePickerOutside(e) {
+  if (!document.getElementById('datePicker').contains(e.target)) closeDatePicker();
+  else document.addEventListener('click', _closeDatePickerOutside, { once: true });
+}
+
+function closeDatePicker() {
+  document.getElementById('dpPanel').classList.remove('open');
+  document.getElementById('dpBtn').classList.remove('open');
+}
+
+function setDateRange(range) {
+  state.dateRange = range;
+  document.querySelectorAll('.dp-option').forEach(el =>
+    el.classList.toggle('active', el.dataset.range === range));
+  document.getElementById('dpCustom').style.display = range === 'custom' ? '' : 'none';
+  if (range !== 'custom') { closeDatePicker(); refresh(); }
+}
+
+function applyCustomRange() {
+  const start = document.getElementById('dpStart').value;
+  const end   = document.getElementById('dpEnd').value;
+  if (!start || !end || start > end) return;
+  state.customStart = start;
+  state.customEnd   = end;
+  closeDatePicker();
+  refresh();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DARK MODE
+// ═══════════════════════════════════════════════════════════════════
+const isDark = () => document.documentElement.classList.contains('dark');
+
+function applyDark(on) {
+  document.documentElement.classList.toggle('dark', on);
+  // Swap icon: sun when dark (click to go light), moon when light (click to go dark)
+  document.getElementById('darkIcon').innerHTML = on
+    ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'  // moon
+    : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'; // sun
+}
+
+function toggleDark() {
+  const on = !document.documentElement.classList.contains('dark');
+  localStorage.setItem('zeroDark', on ? '1' : '0');
+  applyDark(on);
+  refresh(); // re-render charts with updated colors
+}
+
+function initDarkMode() {
+  applyDark(localStorage.getItem('zeroDark') === '1');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function showLoading(on) {
+  document.getElementById('loadingOverlay').classList.toggle('hidden', !on);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+function hideError() {
+  document.getElementById('errorBanner').classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+initDarkMode();
+loadData();
+</script>
+</body>
+</html>
