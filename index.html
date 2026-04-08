@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZeroTrading — Ad Performance Dashboard</title>
+<title>ZeroAlgo — Ad Performance Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -543,9 +543,9 @@ tr:hover td { background: var(--hover-bg); }
 <!-- HEADER -->
 <header class="header">
   <div class="brand">
-    <div class="brand-icon">ZT</div>
+    <div class="brand-icon">ZA</div>
     <div>
-      <div class="brand-name">ZeroTrading</div>
+      <div class="brand-name">ZeroAlgo</div>
       <div class="brand-sub">Ad Performance Dashboard</div>
     </div>
   </div>
@@ -567,6 +567,9 @@ tr:hover td { background: var(--hover-bg); }
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="dp-panel" id="dpPanel">
+        <div class="dp-option" data-range="today"     onclick="setDateRange('today')">Today</div>
+        <div class="dp-option" data-range="yesterday" onclick="setDateRange('yesterday')">Yesterday</div>
+        <div class="dp-divider"></div>
         <div class="dp-option" data-range="last7"     onclick="setDateRange('last7')">Last 7 Days</div>
         <div class="dp-option" data-range="last14"    onclick="setDateRange('last14')">Last 14 Days</div>
         <div class="dp-option" data-range="last30"    onclick="setDateRange('last30')">Last 30 Days</div>
@@ -878,6 +881,12 @@ function getDateRangeBounds() {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   switch (state.dateRange) {
+    case 'today':
+      return { start: today, end: today };
+    case 'yesterday': {
+      const yest = new Date(today); yest.setDate(today.getDate() - 1);
+      return { start: yest, end: yest };
+    }
     case 'last7': {
       const start = new Date(today); start.setDate(today.getDate() - 6);
       return { start, end: today };
@@ -1376,7 +1385,7 @@ let lineInst = null, funnelInst = null, roasTrendInst = null, pipelineInst = nul
 function renderCharts(filteredDays, agg) {
   const labels = filteredDays.map(fd => {
     const d = fd.date;
-    return d.toLocaleString('default', { month: 'short' }) + ' ' + d.getDate();
+    return d.toLocaleString('en-US', { month: 'long' }) + ' ' + d.getDate();
   });
   const spends = filteredDays.map(fd => fd.data.amountSpent);
   const revs   = filteredDays.map(fd => fd.data.revenue);
@@ -1540,7 +1549,7 @@ function renderTable(filteredDays) {
 
   document.getElementById('tableBody').innerHTML = filteredDays.map(fd => {
     const dt = fd.date;
-    const label = dt.toLocaleString('default', { month: 'short' }) + ' ' + dt.getDate();
+    const label = dt.toLocaleString('en-US', { month: 'long' }) + ' ' + dt.getDate();
     const d = fd.data;
     return `
     <tr>
@@ -1580,7 +1589,7 @@ let roasInst = null, costInst = null, volumeInst = null, rateInst = null;
 function renderTrendCharts(filteredDays) {
   const labels = filteredDays.map(fd => {
     const d = fd.date;
-    return d.toLocaleString('default', { month: 'short' }) + ' ' + d.getDate();
+    return d.toLocaleString('en-US', { month: 'long' }) + ' ' + d.getDate();
   });
 
   const mkLine = (ctx, datasets) => ({
@@ -1683,7 +1692,7 @@ function buildHighlightCards(active) {
   const bestRoas  = active.reduce((b, fd) => fd.data.roasRevenue > b.data.roasRevenue ? fd : b, active[0]);
   const worstRoas = active.reduce((b, fd) => fd.data.roasRevenue < b.data.roasRevenue ? fd : b, active[0]);
   const bestRev   = active.reduce((b, fd) => fd.data.revenue     > b.data.revenue     ? fd : b, active[0]);
-  const fmtDt     = d => d.toLocaleString('default', { month: 'short', day: 'numeric' });
+  const fmtDt     = d => d.toLocaleString('en-US', { month: 'long', day: 'numeric' });
   return `
     <div class="highlight-row">
       <div class="highlight-card">
@@ -1787,6 +1796,8 @@ function setTab(tab) {
 function refresh() {
   // Date picker button label
   const RANGE_LABELS = {
+    today:     'Today',
+    yesterday: 'Yesterday',
     last7:     'Last 7 Days',
     last14:    'Last 14 Days',
     last30:    'Last 30 Days',
