@@ -1,11 +1,24 @@
-// ZeroTrading Dashboard — Apps Script backend
+// ZeroAlgo Dashboard — Apps Script backend
 // Paste this into Extensions > Apps Script in your Google Sheet,
 // then Deploy > New deployment > Web app (Anyone can access).
-
+//
 const SHEET_ID = '1BuQpGYwpfSjA8FrNS49ZvnD0cye2PzT7FnISnSG7XKs';
+const DASHBOARD_TOKEN = 'REPLACE_WITH_YOUR_PASSWORD';
 
 function doGet(e) {
-  const sheetName = (e.parameter && e.parameter.sheet) || '';
+  const params = e.parameter || {};
+
+  // Auth check endpoint: ?action=auth&token=xxx
+  if (params.action === 'auth') {
+    return json({ ok: params.token === DASHBOARD_TOKEN });
+  }
+
+  // All data endpoints require a valid token
+  if (params.token !== DASHBOARD_TOKEN) {
+    return json({ error: 'Unauthorized', auth: false });
+  }
+
+  const sheetName = params.sheet || '';
 
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
