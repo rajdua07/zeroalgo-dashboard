@@ -604,6 +604,7 @@ tr:hover td { background: var(--hover-bg); }
     <div class="pill-group" id="campaignToggle">
       <button class="pill active" onclick="setCampaign('HT', this)">High Ticket</button>
       <button class="pill"        onclick="setCampaign('LT', this)">Low Ticket</button>
+      <button class="pill"        onclick="setCampaign('DS', this)">Direct Sales</button>
     </div>
 
     <!-- Date range picker -->
@@ -879,7 +880,8 @@ tr:hover td { background: var(--hover-bg); }
 //  CONFIGURATION
 //  1. Deploy Code.gs as an Apps Script Web App (see README instructions).
 //  2. Paste the Web App URL below.
-//  3. Add new sheet names here as you create new monthly tabs.
+//  3. Past months are listed in HISTORICAL_SHEETS. The current month is
+//     added automatically for each active campaign — no edits needed.
 // ═══════════════════════════════════════════════════════════════════
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwNKmpWauzeb_912NHcT3WESrqzjIXj2B2V-__F2u9xU1fDRKSLzDoJoDdu3sz63srO/exec';
 const SESSION_KEY = 'za_token';
@@ -891,13 +893,26 @@ function getToken() { return sessionStorage.getItem(SESSION_KEY) || ''; }
 const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes
 const CACHE_KEY  = 'zeroDash_v2';
 
-const SHEETS = [
-  { name: 'HT-March', campaign: 'HT' },
-  { name: 'HT-April', campaign: 'HT' },
-  // { name: 'LT-March', campaign: 'LT' },
-  // { name: 'LT-April', campaign: 'LT' },
-  // { name: 'HT-May',   campaign: 'HT' },
-];
+const MONTH_NAMES_FULL = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+
+// Campaigns that get a sheet auto-created for the current month.
+// Add new campaigns here as they launch.
+const ACTIVE_CAMPAIGNS = ['HT', 'DS'];
+
+function buildSheets() {
+  const historical = [
+    { name: 'HT-March', campaign: 'HT' },
+    { name: 'HT-April', campaign: 'HT' },
+  ];
+  const currentMonthName = MONTH_NAMES_FULL[new Date().getMonth()];
+  ACTIVE_CAMPAIGNS.forEach(camp => {
+    const name = `${camp}-${currentMonthName}`;
+    if (!historical.find(s => s.name === name)) historical.push({ name, campaign: camp });
+  });
+  return historical;
+}
+const SHEETS = buildSheets();
 
 const MONTH_MAP = {
   january:1, february:2, march:3, april:4, may:5, june:6,
