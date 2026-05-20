@@ -718,7 +718,7 @@ tr:hover td { background: var(--hover-bg); }
           <div class="fo-change" id="fo-lpv-change"></div>
         </div>
         <div class="fo-stage s-engagement">
-          <div class="fo-tag"><span class="dot"></span>MOFU Engagement</div>
+          <div class="fo-tag" id="fo-mofu-tag"><span class="dot"></span>MOFU Engagement</div>
           <div class="fo-val" id="fo-subs">—</div>
           <div class="fo-sub" id="fo-convrate">—</div>
           <div class="fo-change" id="fo-subs-change"></div>
@@ -790,9 +790,9 @@ tr:hover td { background: var(--hover-bg); }
       </div>
       <div class="section">
         <div class="section-head">
-          <span class="stage-badge badge-engagement">MOFU</span>
-          <span class="section-name">Engagement</span>
-          <span class="section-desc">Form interactions &amp; lead capture</span>
+          <span class="stage-badge badge-engagement" id="section-mofu-badge">MOFU</span>
+          <span class="section-name" id="section-mofu-name">Engagement</span>
+          <span class="section-desc" id="section-mofu-desc">Form interactions &amp; lead capture</span>
         </div>
         <div class="kpi-grid" id="grid-engagement"></div>
       </div>
@@ -1112,6 +1112,32 @@ const ROW_OFFSET = {
   bookingToSale:     29,
 };
 
+// Row offsets for Direct Sales (DS) sheets — different funnel structure
+const ROW_OFFSET_DS = {
+  amountSpent:       4,
+  impressions:       5,
+  cpm:               6,
+  ctr:               7,
+  frequency:         8,
+  linkClicks:        9,
+  cpc:               10,
+  landingPageViews:  11,
+  costPerLpv:        12,
+  lpViewRate:        13,
+  lpToIcRate:        14,
+  initiateCheckout:  15,
+  costPerIc:         16,
+  numberOfSales:     17,
+  costPerSale:       18,
+  revenue:           19,
+  aov:               20,
+  roasRevenue:       21,
+  purchaseRate:      22,
+  profit:            23,
+  profitMargin:      24,
+  icToSale:          25,
+};
+
 // rows is a 2D array returned by Apps Script getDisplayValues()
 // Returns an ARRAY of { key, data } — one per calendar month found in the sheet.
 function parseSheet(rows, sheetConfig) {
@@ -1165,9 +1191,10 @@ function parseSheet(rows, sheetConfig) {
     const dayKey   = String(dd).padStart(2, '0');
     const get      = offset => parseVal((rows[dayHeaderIdx + offset] || [])[col]);
 
+    const rowMap = sheetConfig.campaign === 'DS' ? ROW_OFFSET_DS : ROW_OFFSET;
     if (!byMonth[monthKey]) byMonth[monthKey] = {};
     byMonth[monthKey][dayKey] = Object.fromEntries(
-      Object.entries(ROW_OFFSET).map(([k, offset]) => [k, get(offset)])
+      Object.entries(rowMap).map(([k, offset]) => [k, get(offset)])
     );
   }
 
@@ -1340,6 +1367,40 @@ const KPIS = {
   ],
 };
 
+// KPI definitions for Direct Sales campaign
+const KPIS_DS = {
+  awareness: [
+    { key: 'amountSpent',  label: 'Amount Spent',  fmt: '$',   hl: 'blue'       },
+    { key: 'impressions',  label: 'Impressions',   fmt: 'n'                     },
+    { key: 'cpm',          label: 'CPM',           fmt: 'cpm', invertGood: true },
+    { key: 'ctr',          label: 'CTR',           fmt: '%'                     },
+    { key: 'frequency',    label: 'Frequency',     fmt: 'dec'                   },
+    { key: 'linkClicks',   label: 'Link Clicks',   fmt: 'n'                     },
+    { key: 'cpc',          label: 'CPC',           fmt: '$',   invertGood: true },
+  ],
+  capture: [
+    { key: 'landingPageViews', label: 'Landing Page Views',   fmt: 'n',  hl: 'purple'    },
+    { key: 'costPerLpv',       label: 'Cost per LPV',         fmt: '$',  invertGood: true },
+    { key: 'lpViewRate',       label: 'LP View Rate',          fmt: '%'                   },
+    { key: 'lpToIcRate',       label: 'LP → IC Rate',          fmt: '%'                   },
+  ],
+  checkout: [
+    { key: 'initiateCheckout', label: 'Initiate Checkout',    fmt: 'n',  hl: 'amber'     },
+    { key: 'costPerIc',        label: 'Cost per IC',          fmt: '$',  invertGood: true },
+  ],
+  sales: [
+    { key: 'numberOfSales', label: 'Number of Sales',         fmt: 'n',  hl: 'green'     },
+    { key: 'costPerSale',   label: 'Cost per Sale (CPA)',      fmt: '$',  invertGood: true },
+    { key: 'revenue',       label: 'Revenue',                 fmt: '$$', hl: 'green'     },
+    { key: 'aov',           label: 'AOV',                     fmt: '$$', hl: 'green'     },
+    { key: 'roasRevenue',   label: 'ROAS (Revenue)',          fmt: 'x',  hl: 'green'     },
+    { key: 'purchaseRate',  label: 'Purchase Rate',           fmt: '%'                   },
+    { key: 'profit',        label: 'Profit',                  fmt: '$$', hl: 'green'     },
+    { key: 'profitMargin',  label: 'Profit Margin',           fmt: '%'                   },
+    { key: 'icToSale',      label: 'IC → Sale',               fmt: '%'                   },
+  ],
+};
+
 // ═══════════════════════════════════════════════════════════════════
 //  AGGREGATION
 // ═══════════════════════════════════════════════════════════════════
@@ -1399,6 +1460,47 @@ function aggregate(filteredDays) {
   };
 }
 
+function aggregateDS(filteredDays) {
+  if (!filteredDays || !filteredDays.length) return null;
+  const rows = filteredDays.map(fd => fd.data);
+
+  const sum = k => rows.reduce((a, r) => a + (r[k] || 0), 0);
+  const avg = k => rows.length > 0 ? sum(k) / rows.length : 0;
+
+  const spend  = sum('amountSpent');
+  const impr   = sum('impressions');
+  const clicks = sum('linkClicks');
+  const lpv    = sum('landingPageViews');
+  const ic     = sum('initiateCheckout');
+  const sales  = sum('numberOfSales');
+  const rev    = sum('revenue');
+
+  return {
+    amountSpent:       spend,
+    impressions:       impr,
+    cpm:               impr   > 0 ? spend / impr   * 1000 : 0,
+    ctr:               impr   > 0 ? clicks / impr  * 100  : 0,
+    frequency:         avg('frequency'),
+    linkClicks:        clicks,
+    cpc:               clicks > 0 ? spend / clicks : 0,
+    landingPageViews:  lpv,
+    costPerLpv:        lpv    > 0 ? spend / lpv    : 0,
+    lpViewRate:        clicks > 0 ? lpv / clicks   * 100  : 0,
+    lpToIcRate:        avg('lpToIcRate'),
+    initiateCheckout:  ic,
+    costPerIc:         ic     > 0 ? spend / ic     : 0,
+    numberOfSales:     sales,
+    costPerSale:       sales  > 0 ? spend / sales  : 0,
+    revenue:           rev,
+    aov:               sales  > 0 ? rev / sales    : 0,
+    roasRevenue:       spend  > 0 ? rev / spend    : 0,
+    purchaseRate:      lpv    > 0 ? sales / lpv    * 100  : 0,
+    profit:            sum('profit'),
+    profitMargin:      avg('profitMargin'),
+    icToSale:          ic     > 0 ? sales / ic     * 100  : 0,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  RENDER KPI GRIDS
 // ═══════════════════════════════════════════════════════════════════
@@ -1426,6 +1528,12 @@ function renderFunnel(d, prev) {
   const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML  = html; };
   const chgIds  = ['fo-spend-change','fo-lpv-change','fo-subs-change','fo-revenue-change'];
 
+  const isDS = state.campaign === 'DS';
+
+  // Update MOFU label in funnel overview
+  const mofuTag = document.getElementById('fo-mofu-tag');
+  if (mofuTag) mofuTag.innerHTML = `<span class="dot"></span>${isDS ? 'MOFU Checkout' : 'MOFU Engagement'}`;
+
   if (!d) {
     ['fo-spend','fo-impressions','fo-lpv','fo-lpvrate',
      'fo-subs','fo-convrate','fo-revenue','fo-roas'].forEach(id => set(id, '—'));
@@ -1437,15 +1545,23 @@ function renderFunnel(d, prev) {
   set('fo-impressions', F.n(d.impressions) + ' impressions');
   set('fo-lpv',         F.n(d.landingPageViews));
   set('fo-lpvrate',     F['%'](d.lpViewRate) + ' LP view rate');
-  set('fo-subs',        F.n(d.formSubs));
-  set('fo-convrate',    F['%'](d.formConvRate) + ' form conversion');
   set('fo-revenue',     F['$'](d.revenue));
   set('fo-roas',        F.x(d.roasRevenue) + ' ROAS');
+
+  if (isDS) {
+    set('fo-subs',    F.n(d.initiateCheckout));
+    set('fo-convrate', F['$'](d.costPerIc) + ' cost per IC');
+  } else {
+    set('fo-subs',    F.n(d.formSubs));
+    set('fo-convrate', F['%'](d.formConvRate) + ' form conversion');
+  }
 
   if (prev) {
     setHtml('fo-spend-change',   changeBadge(d.amountSpent,      prev.amountSpent));
     setHtml('fo-lpv-change',     changeBadge(d.landingPageViews, prev.landingPageViews));
-    setHtml('fo-subs-change',    changeBadge(d.formSubs,         prev.formSubs));
+    setHtml('fo-subs-change',    changeBadge(
+      isDS ? d.initiateCheckout : d.formSubs,
+      isDS ? prev.initiateCheckout : prev.formSubs));
     setHtml('fo-revenue-change', changeBadge(d.revenue,          prev.revenue));
   } else {
     chgIds.forEach(id => setHtml(id, ''));
@@ -1458,29 +1574,32 @@ function renderFunnel(d, prev) {
 let lineInst = null, funnelInst = null, roasTrendInst = null, pipelineInst = null;
 
 function renderCharts(filteredDays, agg) {
+  const isDS = state.campaign === 'DS';
   const labels = filteredDays.map(fd => {
     const d = fd.date;
     return d.toLocaleString('en-US', { month: 'long' }) + ' ' + d.getDate();
   });
   const spends = filteredDays.map(fd => fd.data.amountSpent);
   const revs   = filteredDays.map(fd => fd.data.revenue);
-  const ccs    = filteredDays.map(fd => fd.data.cashCollected);
 
   const lCtx = document.getElementById('lineChart').getContext('2d');
   if (lineInst) lineInst.destroy();
+  const lineDatasets = [
+    { label:'Spend',   data: spends, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.07)',
+      fill:true, tension:.4, pointRadius:2, borderWidth:2 },
+    { label:'Revenue', data: revs,   borderColor:'#059669', backgroundColor:'rgba(5,150,105,.05)',
+      fill:true, tension:.4, pointRadius:2, borderWidth:2 },
+  ];
+  if (!isDS) {
+    lineDatasets.push(
+      { label:'Cash Collected', data: filteredDays.map(fd => fd.data.cashCollected),
+        borderColor:'#d97706', backgroundColor:'rgba(217,119,6,.04)',
+        fill:true, tension:.4, pointRadius:1, borderWidth:1.5, borderDash:[4,3] }
+    );
+  }
   lineInst = new Chart(lCtx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label:'Spend',          data: spends, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.07)',
-          fill:true, tension:.4, pointRadius:2, borderWidth:2 },
-        { label:'Revenue',        data: revs,   borderColor:'#059669', backgroundColor:'rgba(5,150,105,.05)',
-          fill:true, tension:.4, pointRadius:2, borderWidth:2 },
-        { label:'Cash Collected', data: ccs,    borderColor:'#d97706', backgroundColor:'rgba(217,119,6,.04)',
-          fill:true, tension:.4, pointRadius:1, borderWidth:1.5, borderDash:[4,3] },
-      ],
-    },
+    data: { labels, datasets: lineDatasets },
     options: {
       responsive:true, interaction:{mode:'index',intersect:false},
       plugins:{
@@ -1497,18 +1616,19 @@ function renderCharts(filteredDays, agg) {
 
   const fCtx = document.getElementById('funnelChart').getContext('2d');
   if (funnelInst) funnelInst.destroy();
+  const funnelLabels = isDS
+    ? ['Clicks','LPVs','Checkouts','Sales']
+    : ['Clicks','LPVs','Subs','Calls','Sales'];
+  const funnelData = isDS
+    ? (agg ? [agg.linkClicks, agg.landingPageViews, agg.initiateCheckout, agg.numberOfSales] : [0,0,0,0])
+    : (agg ? [agg.linkClicks, agg.landingPageViews, agg.formSubs, agg.callsBooked, agg.numberOfSales] : [0,0,0,0,0]);
+  const funnelBg     = isDS ? ['#bfdbfe','#ddd6fe','#fde68a','#34d399'] : ['#bfdbfe','#ddd6fe','#fde68a','#6ee7b7','#34d399'];
+  const funnelBorder = isDS ? ['#2563eb','#7c3aed','#d97706','#059669'] : ['#2563eb','#7c3aed','#d97706','#059669','#059669'];
   funnelInst = new Chart(fCtx, {
     type:'bar',
     data:{
-      labels:['Clicks','LPVs','Subs','Calls','Sales'],
-      datasets:[{
-        data: agg
-          ? [agg.linkClicks, agg.landingPageViews, agg.formSubs, agg.callsBooked, agg.numberOfSales]
-          : [0,0,0,0,0],
-        backgroundColor:['#bfdbfe','#ddd6fe','#fde68a','#6ee7b7','#34d399'],
-        borderColor:    ['#2563eb','#7c3aed','#d97706','#059669','#059669'],
-        borderWidth:1.5, borderRadius:6,
-      }],
+      labels: funnelLabels,
+      datasets:[{ data: funnelData, backgroundColor: funnelBg, borderColor: funnelBorder, borderWidth:1.5, borderRadius:6 }],
     },
     options:{
       responsive:true,
@@ -1554,25 +1674,25 @@ function renderCharts(filteredDays, agg) {
     },
   });
 
-  // ── Pipeline Quality (conversion % at each key stage) ──
-  const lpvToSub  = filteredDays.map(fd => fd.data.lpToFormView   || 0);
-  const subToCall = filteredDays.map(fd => fd.data.bookingRate     || 0);
-  const callToSale= filteredDays.map(fd => fd.data.bookingToSale   || 0);
+  // ── Pipeline Quality ──
   const pCtx = document.getElementById('pipelineChart').getContext('2d');
   if (pipelineInst) pipelineInst.destroy();
+  const pipelineDatasets = isDS ? [
+    { label: 'LP→IC %',      data: filteredDays.map(fd => fd.data.lpToIcRate  || 0),
+      borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'IC→Sale %',    data: filteredDays.map(fd => fd.data.icToSale    || 0),
+      borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+  ] : [
+    { label: 'LPV→Sub %',   data: filteredDays.map(fd => fd.data.lpToFormView  || 0),
+      borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Sub→Call %',  data: filteredDays.map(fd => fd.data.bookingRate   || 0),
+      borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Call→Sale %', data: filteredDays.map(fd => fd.data.bookingToSale || 0),
+      borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+  ];
   pipelineInst = new Chart(pCtx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        { label: 'LPV→Sub %',  data: lpvToSub,   borderColor: '#d97706',
-          backgroundColor: 'rgba(217,119,6,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
-        { label: 'Sub→Call %', data: subToCall,  borderColor: '#059669',
-          backgroundColor: 'rgba(5,150,105,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
-        { label: 'Call→Sale %',data: callToSale, borderColor: '#2563eb',
-          backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
-      ],
-    },
+    data: { labels, datasets: pipelineDatasets },
     options: {
       responsive: true, interaction: { mode: 'index', intersect: false },
       plugins: {
@@ -1607,53 +1727,102 @@ function renderTable(filteredDays) {
 
   sub.textContent = `${filteredDays.length} days`;
 
-  document.getElementById('tableHead').innerHTML = `
-    <tr>
-      <th rowspan="2" style="text-align:left;vertical-align:bottom">Day</th>
-      <th colspan="7" class="th-group th-awareness">TOFU Awareness</th>
-      <th colspan="4" class="th-group th-capture">TOFU Capture</th>
-      <th colspan="4" class="th-group th-engagement">MOFU Engagement</th>
-      <th colspan="8" class="th-group th-sales">BOFU Sales</th>
-    </tr>
-    <tr>
-      <th>Spent</th><th>Impressions</th><th>CPM</th><th>CTR</th><th>Freq</th><th>Clicks</th><th>CPC</th>
-      <th>LPVs</th><th>Cost/LPV</th><th>LPV Rate</th><th>LP→Form</th>
-      <th>Subs</th><th>Cost/Sub</th><th>Start Rate</th><th>Conv Rate</th>
-      <th>Calls</th><th>Cost/Call</th><th>Sales</th><th>Revenue</th><th>CC</th><th>ROAS Rev</th><th>ROAS CC</th><th>Sub→Book</th>
-    </tr>`;
+  const isDS = state.campaign === 'DS';
 
-  document.getElementById('tableBody').innerHTML = filteredDays.map(fd => {
-    const dt = fd.date;
-    const label = dt.toLocaleString('en-US', { month: 'long' }) + ' ' + dt.getDate();
-    const d = fd.data;
-    return `
-    <tr>
-      <td>${label}</td>
-      <td>${F['$'](d.amountSpent)}</td>
-      <td>${F.n(d.impressions)}</td>
-      <td>${F.cpm(d.cpm)}</td>
-      <td>${F['%'](d.ctr)}</td>
-      <td>${F.dec(d.frequency)}</td>
-      <td>${F.n(d.linkClicks)}</td>
-      <td>${F['$'](d.cpc)}</td>
-      <td>${F.n(d.landingPageViews)}</td>
-      <td>${F['$'](d.costPerLpv)}</td>
-      <td>${F['%'](d.lpViewRate)}</td>
-      <td>${F['%'](d.lpToFormView)}</td>
-      <td>${F.n(d.formSubs)}</td>
-      <td>${F['$'](d.costPerSubmission)}</td>
-      <td>${F['%'](d.formStartRate)}</td>
-      <td>${F['%'](d.formConvRate)}</td>
-      <td>${F.n(d.callsBooked)}</td>
-      <td>${F['$'](d.costPerCall)}</td>
-      <td>${F.n(d.numberOfSales)}</td>
-      <td>${F['$'](d.revenue)}</td>
-      <td>${F['$'](d.cashCollected)}</td>
-      <td>${F.x(d.roasRevenue)}</td>
-      <td>${F.x(d.roasCC)}</td>
-      <td>${F['%'](d.subToBooking)}</td>
-    </tr>`;
-  }).join('');
+  if (isDS) {
+    document.getElementById('tableHead').innerHTML = `
+      <tr>
+        <th rowspan="2" style="text-align:left;vertical-align:bottom">Day</th>
+        <th colspan="7" class="th-group th-awareness">TOFU Awareness</th>
+        <th colspan="4" class="th-group th-capture">TOFU Capture</th>
+        <th colspan="2" class="th-group th-engagement">MOFU Checkout</th>
+        <th colspan="9" class="th-group th-sales">BOFU Sales</th>
+      </tr>
+      <tr>
+        <th>Spent</th><th>Impressions</th><th>CPM</th><th>CTR</th><th>Freq</th><th>Clicks</th><th>CPC</th>
+        <th>LPVs</th><th>Cost/LPV</th><th>LPV Rate</th><th>LP→IC</th>
+        <th>Checkouts</th><th>Cost/IC</th>
+        <th>Sales</th><th>CPA</th><th>Revenue</th><th>AOV</th><th>ROAS</th><th>Buy Rate</th><th>Profit</th><th>Margin</th><th>IC→Sale</th>
+      </tr>`;
+    document.getElementById('tableBody').innerHTML = filteredDays.map(fd => {
+      const dt = fd.date;
+      const label = dt.toLocaleString('en-US', { month: 'long' }) + ' ' + dt.getDate();
+      const d = fd.data;
+      return `
+      <tr>
+        <td>${label}</td>
+        <td>${F['$'](d.amountSpent)}</td>
+        <td>${F.n(d.impressions)}</td>
+        <td>${F.cpm(d.cpm)}</td>
+        <td>${F['%'](d.ctr)}</td>
+        <td>${F.dec(d.frequency)}</td>
+        <td>${F.n(d.linkClicks)}</td>
+        <td>${F['$'](d.cpc)}</td>
+        <td>${F.n(d.landingPageViews)}</td>
+        <td>${F['$'](d.costPerLpv)}</td>
+        <td>${F['%'](d.lpViewRate)}</td>
+        <td>${F['%'](d.lpToIcRate)}</td>
+        <td>${F.n(d.initiateCheckout)}</td>
+        <td>${F['$'](d.costPerIc)}</td>
+        <td>${F.n(d.numberOfSales)}</td>
+        <td>${F['$'](d.costPerSale)}</td>
+        <td>${F['$$'](d.revenue)}</td>
+        <td>${F['$$'](d.aov)}</td>
+        <td>${F.x(d.roasRevenue)}</td>
+        <td>${F['%'](d.purchaseRate)}</td>
+        <td>${F['$$'](d.profit)}</td>
+        <td>${F['%'](d.profitMargin)}</td>
+        <td>${F['%'](d.icToSale)}</td>
+      </tr>`;
+    }).join('');
+  } else {
+    document.getElementById('tableHead').innerHTML = `
+      <tr>
+        <th rowspan="2" style="text-align:left;vertical-align:bottom">Day</th>
+        <th colspan="7" class="th-group th-awareness">TOFU Awareness</th>
+        <th colspan="4" class="th-group th-capture">TOFU Capture</th>
+        <th colspan="4" class="th-group th-engagement">MOFU Engagement</th>
+        <th colspan="8" class="th-group th-sales">BOFU Sales</th>
+      </tr>
+      <tr>
+        <th>Spent</th><th>Impressions</th><th>CPM</th><th>CTR</th><th>Freq</th><th>Clicks</th><th>CPC</th>
+        <th>LPVs</th><th>Cost/LPV</th><th>LPV Rate</th><th>LP→Form</th>
+        <th>Subs</th><th>Cost/Sub</th><th>Start Rate</th><th>Conv Rate</th>
+        <th>Calls</th><th>Cost/Call</th><th>Sales</th><th>Revenue</th><th>CC</th><th>ROAS Rev</th><th>ROAS CC</th><th>Sub→Book</th>
+      </tr>`;
+    document.getElementById('tableBody').innerHTML = filteredDays.map(fd => {
+      const dt = fd.date;
+      const label = dt.toLocaleString('en-US', { month: 'long' }) + ' ' + dt.getDate();
+      const d = fd.data;
+      return `
+      <tr>
+        <td>${label}</td>
+        <td>${F['$'](d.amountSpent)}</td>
+        <td>${F.n(d.impressions)}</td>
+        <td>${F.cpm(d.cpm)}</td>
+        <td>${F['%'](d.ctr)}</td>
+        <td>${F.dec(d.frequency)}</td>
+        <td>${F.n(d.linkClicks)}</td>
+        <td>${F['$'](d.cpc)}</td>
+        <td>${F.n(d.landingPageViews)}</td>
+        <td>${F['$'](d.costPerLpv)}</td>
+        <td>${F['%'](d.lpViewRate)}</td>
+        <td>${F['%'](d.lpToFormView)}</td>
+        <td>${F.n(d.formSubs)}</td>
+        <td>${F['$'](d.costPerSubmission)}</td>
+        <td>${F['%'](d.formStartRate)}</td>
+        <td>${F['%'](d.formConvRate)}</td>
+        <td>${F.n(d.callsBooked)}</td>
+        <td>${F['$'](d.costPerCall)}</td>
+        <td>${F.n(d.numberOfSales)}</td>
+        <td>${F['$'](d.revenue)}</td>
+        <td>${F['$'](d.cashCollected)}</td>
+        <td>${F.x(d.roasRevenue)}</td>
+        <td>${F.x(d.roasCC)}</td>
+        <td>${F['%'](d.subToBooking)}</td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1682,35 +1851,50 @@ function renderTrendCharts(filteredDays) {
 
   const d = id => document.getElementById(id).getContext('2d');
 
+  const isDS = state.campaign === 'DS';
+
   if (roasInst) roasInst.destroy();
-  roasInst = new Chart(d('roasChart'), mkLine(null, [
+  const roasDatasets = isDS ? [
+    { label: 'Rev ROAS', data: filteredDays.map(f => f.data.roasRevenue),
+      borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
+  ] : [
     { label: 'Rev ROAS', data: filteredDays.map(f => f.data.roasRevenue),
       borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.06)', fill: true, tension: .4, pointRadius: 2, borderWidth: 2 },
     { label: 'CC ROAS',  data: filteredDays.map(f => f.data.roasCC),
       borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.04)', fill: true, tension: .4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
-  ]));
+  ];
+  roasInst = new Chart(d('roasChart'), mkLine(null, roasDatasets));
 
   if (costInst) costInst.destroy();
-  costInst = new Chart(d('costChart'), mkLine(null, [
+  const costDatasets = isDS ? [
+    { label: 'Cost/LPV',  data: filteredDays.map(f => f.data.costPerLpv),
+      borderColor: '#7c3aed', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Cost/IC',   data: filteredDays.map(f => f.data.costPerIc),
+      borderColor: '#d97706', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'Cost/Sale', data: filteredDays.map(f => f.data.costPerSale),
+      borderColor: '#dc2626', tension: .4, pointRadius: 2, borderWidth: 2 },
+  ] : [
     { label: 'Cost/Sub',  data: filteredDays.map(f => f.data.costPerSubmission),
       borderColor: '#7c3aed', tension: .4, pointRadius: 2, borderWidth: 2 },
     { label: 'Cost/Call', data: filteredDays.map(f => f.data.costPerCall),
       borderColor: '#059669', tension: .4, pointRadius: 2, borderWidth: 2 },
     { label: 'Cost/Deal', data: filteredDays.map(f => f.data.costPerDeal),
       borderColor: '#dc2626', tension: .4, pointRadius: 2, borderWidth: 2 },
-  ]));
+  ];
+  costInst = new Chart(d('costChart'), mkLine(null, costDatasets));
 
   if (volumeInst) volumeInst.destroy();
+  const volumeDatasets = isDS ? [
+    { label: 'Checkouts', data: filteredDays.map(f => f.data.initiateCheckout), backgroundColor: '#fde68a', borderRadius: 3 },
+    { label: 'Sales',     data: filteredDays.map(f => f.data.numberOfSales),    backgroundColor: '#34d399', borderRadius: 3 },
+  ] : [
+    { label: 'Subs',  data: filteredDays.map(f => f.data.formSubs),     backgroundColor: '#ddd6fe', borderRadius: 3 },
+    { label: 'Calls', data: filteredDays.map(f => f.data.callsBooked),  backgroundColor: '#6ee7b7', borderRadius: 3 },
+    { label: 'Sales', data: filteredDays.map(f => f.data.numberOfSales),backgroundColor: '#fde68a', borderRadius: 3 },
+  ];
   volumeInst = new Chart(d('volumeChart'), {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Subs',  data: filteredDays.map(f => f.data.formSubs),     backgroundColor: '#ddd6fe', borderRadius: 3 },
-        { label: 'Calls', data: filteredDays.map(f => f.data.callsBooked),  backgroundColor: '#6ee7b7', borderRadius: 3 },
-        { label: 'Sales', data: filteredDays.map(f => f.data.numberOfSales),backgroundColor: '#fde68a', borderRadius: 3 },
-      ],
-    },
+    data: { labels, datasets: volumeDatasets },
     options: {
       responsive: true, interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false } },
@@ -1722,12 +1906,18 @@ function renderTrendCharts(filteredDays) {
   });
 
   if (rateInst) rateInst.destroy();
-  rateInst = new Chart(d('rateChart'), mkLine(null, [
+  const rateDatasets = isDS ? [
+    { label: 'CTR',       data: filteredDays.map(f => f.data.ctr),
+      borderColor: '#2563eb', tension: .4, pointRadius: 2, borderWidth: 2 },
+    { label: 'IC→Sale %', data: filteredDays.map(f => f.data.icToSale || 0),
+      borderColor: '#059669', tension: .4, pointRadius: 2, borderWidth: 2 },
+  ] : [
     { label: 'CTR',          data: filteredDays.map(f => f.data.ctr),
       borderColor: '#2563eb', tension: .4, pointRadius: 2, borderWidth: 2 },
     { label: 'Booking Rate', data: filteredDays.map(f => f.data.bookingRate),
       borderColor: '#059669', tension: .4, pointRadius: 2, borderWidth: 2 },
-  ]));
+  ];
+  rateInst = new Chart(d('rateChart'), mkLine(null, rateDatasets));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1744,10 +1934,22 @@ const SUMMARY_DEFS = [
   { label: 'Cost per Deal',  key: 'costPerDeal',    fmt: '$',  inv: true,  color: ''              },
 ];
 
+const SUMMARY_DEFS_DS = [
+  { label: 'Total Spend',        key: 'amountSpent',      fmt: '$$', inv: false, color: ''              },
+  { label: 'Total Revenue',      key: 'revenue',           fmt: '$$', inv: false, color: 'var(--green)'  },
+  { label: 'Profit',             key: 'profit',            fmt: '$$', inv: false, color: 'var(--green)'  },
+  { label: 'ROAS (Revenue)',     key: 'roasRevenue',       fmt: 'x',  inv: false, color: 'var(--blue)'   },
+  { label: 'Initiate Checkouts', key: 'initiateCheckout',  fmt: 'n',  inv: false, color: ''              },
+  { label: 'Sales Closed',       key: 'numberOfSales',     fmt: 'n',  inv: false, color: 'var(--green)'  },
+  { label: 'AOV',                key: 'aov',               fmt: '$$', inv: false, color: ''              },
+  { label: 'Cost per Sale',      key: 'costPerSale',       fmt: '$',  inv: true,  color: ''              },
+];
+
 function renderSummaryCards(agg, prevAgg) {
   const noData = '<div class="no-data">No data for this period</div>';
+  const defs = state.campaign === 'DS' ? SUMMARY_DEFS_DS : SUMMARY_DEFS;
   const html = agg
-    ? SUMMARY_DEFS.map(c => `
+    ? defs.map(c => `
         <div class="insight-card">
           <div class="insight-label">${c.label}</div>
           <div class="insight-val"${c.color ? ` style="color:${c.color}"` : ''}>${fmtV(agg[c.key], c.fmt)}</div>
@@ -1807,24 +2009,32 @@ function renderInsights(filteredDays, agg, prevAgg) {
   const active = filteredDays.filter(fd => fd.data.amountSpent > 0);
   if (!active.length) { el.innerHTML = '<div class="no-data">No spend data found</div>'; return; }
 
-  const summaryCards = SUMMARY_DEFS.map(c => `
+  const isDS = state.campaign === 'DS';
+  const insightDefs = isDS ? SUMMARY_DEFS_DS : SUMMARY_DEFS;
+  const summaryCards = insightDefs.map(c => `
     <div class="insight-card">
       <div class="insight-label">${c.label}</div>
       <div class="insight-val"${c.color ? ` style="color:${c.color}"` : ''}>${fmtV(agg[c.key], c.fmt)}</div>
       ${prevAgg ? changeBadge(agg[c.key], prevAgg[c.key], c.inv) : ''}
     </div>`).join('');
 
-  const funnelSteps = [
+  const funnelStepsData = isDS ? [
+    ['Impressions → Clicks', agg.ctr,          'var(--blue)'],
+    ['Clicks → LPVs',        agg.lpViewRate,   'var(--purple)'],
+    ['LPVs → Checkouts',     agg.lpToIcRate,   'var(--amber)'],
+    ['Checkouts → Sales',    agg.icToSale,     'var(--green)'],
+  ] : [
     ['Impressions → Clicks', agg.ctr,          'var(--blue)'],
     ['Clicks → LPVs',        agg.lpViewRate,   'var(--purple)'],
     ['LPVs → Subs',          agg.lpToFormView, 'var(--amber)'],
     ['Subs → Calls',         agg.bookingRate,  'var(--green)'],
     ['Calls → Sales',        agg.bookingToSale,'var(--green)'],
-  ].map(([label, val, color]) => `
+  ];
+  const funnelSteps = funnelStepsData.map(([label, val, color]) => `
     <div class="fe-row">
       <div class="fe-label">${label}</div>
-      <div class="fe-bar-wrap"><div class="fe-bar" style="width:${Math.min(100,Math.max(0,val))}%;background:${color}"></div></div>
-      <div class="fe-val">${val.toFixed(1)}%</div>
+      <div class="fe-bar-wrap"><div class="fe-bar" style="width:${Math.min(100,Math.max(0,val||0))}%;background:${color}"></div></div>
+      <div class="fe-val">${(val||0).toFixed(1)}%</div>
     </div>`).join('');
 
   el.innerHTML = `
@@ -1888,16 +2098,27 @@ function refresh() {
 
   const filteredDays = getFilteredDays();
   const prevDays     = getPreviousPeriodDays();
-  const agg          = aggregate(filteredDays);
-  const prevAgg      = aggregate(prevDays);
+  const isDS         = state.campaign === 'DS';
+  const agg          = isDS ? aggregateDS(filteredDays) : aggregate(filteredDays);
+  const prevAgg      = isDS ? aggregateDS(prevDays)     : aggregate(prevDays);
+
+  // Update MOFU section labels in Funnel tab
+  const mofuBadge = document.getElementById('section-mofu-badge');
+  const mofuName  = document.getElementById('section-mofu-name');
+  const mofuDesc  = document.getElementById('section-mofu-desc');
+  if (mofuBadge) mofuBadge.textContent = 'MOFU';
+  if (mofuName)  mofuName.textContent  = isDS ? 'Checkout'   : 'Engagement';
+  if (mofuDesc)  mofuDesc.textContent  = isDS ? 'Checkout initiation metrics' : 'Form interactions & lead capture';
+
+  const kpis = isDS ? KPIS_DS : KPIS;
 
   renderSummaryCards(agg, prevAgg);
   renderHighlights(filteredDays);
   renderFunnel(agg, prevAgg);
-  renderGrid('grid-awareness',  KPIS.awareness,  agg, prevAgg);
-  renderGrid('grid-capture',    KPIS.capture,    agg, prevAgg);
-  renderGrid('grid-engagement', KPIS.engagement, agg, prevAgg);
-  renderGrid('grid-sales',      KPIS.sales,      agg, prevAgg);
+  renderGrid('grid-awareness',  kpis.awareness,                          agg, prevAgg);
+  renderGrid('grid-capture',    kpis.capture,                            agg, prevAgg);
+  renderGrid('grid-engagement', isDS ? kpis.checkout : kpis.engagement,  agg, prevAgg);
+  renderGrid('grid-sales',      kpis.sales,                              agg, prevAgg);
   renderCharts(filteredDays, agg);
   renderTrendCharts(filteredDays);
   renderTable(filteredDays);
